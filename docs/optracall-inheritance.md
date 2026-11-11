@@ -46,7 +46,7 @@
 - [x] 初始化 `main`，配置 `origin` 为 `https://github.com/gadfly-hbo/OptraSentiScope.git`。
 - [x] 写入工程入口、详细流程、专项 Skill 规范与基础文件。
 - [x] 核对文档引用、来源一致性、公开内容与差异，并完成全新非作者只读复核；限初始化静态范围通过。
-- [ ] 首次提交并推送 `main`，核对本地 HEAD、远端 HEAD 和工作区状态。
+- [x] 首次提交并推送 `main`，核对本地 HEAD、远端 HEAD 和工作区状态；首次推送后一致且工作区干净。
 
 本次无产品实现与界面变更，UI Demo 不适用；运行时测试、构建和 CI 未运行／未建立。初始化静态检查、独立复核和 Git 交付分别记录，不构成产品验收。原始来源快照与本地验证证据保留在被忽略的 `.local/bootstrap/`。
 
@@ -57,3 +57,9 @@
 - 运行时测试、构建、真实模型和部署未运行；当前无产品代码、构建系统及 CI。
 
 原始静态检查与复核报告分别保留在 `.local/bootstrap/static-validation.json` 和 `.local/bootstrap/independent-review.md`；Git 交付结果另存 `.local/bootstrap/` 并以实际本地／远端引用核对。
+
+## Git 交付
+
+首次提交 `b822576492d2b40d8f241c1443c5b85f3cc9ab0a` 已推送到指定远端 `main`；推送后实际查询本地 HEAD 与 GitHub `refs/heads/main` 一致，工作区干净。远端默认分支为 `main`，保留原有 PUBLIC 可见性。该次交付包含 8 个初始化文件。
+
+本小节为首次推送后的机械收尾记录，后续提交仅更新本文件中的清单及 Git 事实；最终交付身份与再次核验回执保留在 `.local/bootstrap/`，以实际 Git 引用为准。
