@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "synthetic": true,
+    "note": "所有资产状态仅为虚拟POC前提，不代表真实Call已发布或用户已批准"
+  },
+  "assets": [
+    {
+      "asset_id": "SYN-SAP-NS-v1",
+      "kind": "metric_definition",
+      "available_at": "2026-06-30T12:00:00+08:00",
+      "status": "poc_assumed_published",
+      "content": "确认收货归季，商品实付额已扣商家折扣，不含运费税费；扣除关联订单的已完成商品退款；退款发生期另列。退款生效与资料可用时间分别保留。"
+    },
+    {
+      "asset_id": "SYN-SAP-GM-v1",
+      "kind": "metric_definition",
+      "available_at": "2026-06-30T12:00:00+08:00",
+      "status": "poc_assumed_published",
+      "content": "商品毛利=净商品销售额-(原订单商品销售成本-已确认退货成本回转)。毛利率按合计计算；支付/平台/履约/独立货损/营销另列经营贡献。不得重复扣减。"
+    },
+    {
+      "asset_id": "SYN-SAP-BUDGET-v1",
+      "kind": "metric_definition",
+      "available_at": "2026-06-30T12:00:00+08:00",
+      "status": "poc_assumed_published",
+      "content": "按服务实际消耗归季，已承诺未消耗金额另占用；同合同已消耗金额从承诺中扣除。实际付款另看，不作本例消耗发生时点。"
+    },
+    {
+      "asset_id": "SYN-RAP-Q3-v1",
+      "kind": "goal_context",
+      "available_at": "2026-06-30T12:00:00+08:00",
+      "status": "poc_assumption",
+      "content": "成人服饰、品牌A、虚拟平台P1单店；2026Q3净销售至少120000元，毛利率至少48%，营销预算占用不超过18000元；经营动作由负责人决定执行。"
+    },
+    {
+      "asset_id": "SYN-CASE-2025-Q3",
+      "kind": "case_memory",
+      "available_at": "2025-10-16T12:00:00+08:00",
+      "status": "conditional_reference",
+      "content": "虚构基期净销售100000元。此前长裤投放在供给充足的情境被负责人认为值得参考；未提供因果增益证明，复用时须核对库存、预算和人群条件。"
+    },
+    {
+      "asset_id": "SYN-MEM-RETURN-01",
+      "kind": "candidate_belief",
+      "available_at": "2026-06-20T12:00:00+08:00",
+      "status": "unverified",
+      "content": "候选认识：退款后商品成本与各项手续费都会恢复。该说法未核验，不能当正式口径；需要用当前仅退款、货损和手续费记录检查。"
+    }
+  ]
+}

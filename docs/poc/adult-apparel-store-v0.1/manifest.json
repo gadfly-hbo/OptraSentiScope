@@ -1,0 +1,55 @@
+{
+  "package_id": "POC-ADULT-APPAREL-STORE-001",
+  "version": "0.1",
+  "approval_status": "pending_overall_review",
+  "synthetic": true,
+  "hash_algorithm": "sha256",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 10294,
+      "sha256": "abd278abd6d19f4f64c83c0984a58df877a6df4af6a71cb121574fd6f7e84f33"
+    },
+    {
+      "path": "inputs/call-context.json",
+      "bytes": 2422,
+      "sha256": "b5e28b92d0575b8f668a0e3f89743f3f3616633fa620db54d7c356e75486d685"
+    },
+    {
+      "path": "inputs/replay-2026-09-30.json",
+      "bytes": 1004357,
+      "sha256": "045e9932ff192e4090c9979620cd12eca94adc47db52edffefca930f1f4a0995"
+    },
+    {
+      "path": "inputs/replay-2026-10-15.json",
+      "bytes": 1042006,
+      "sha256": "ce7073e3c912fbe968141835afc5d7a4d10992ce831e0837dbab187b15e6bfe4"
+    },
+    {
+      "path": "inputs/replay-2026-10-22.json",
+      "bytes": 1062363,
+      "sha256": "1e070bdd27eebf359a6d012e9cab82f6a50e206e466ebac2508d7312c9a11f1d"
+    },
+    {
+      "path": "inputs/scenario.json",
+      "bytes": 5009,
+      "sha256": "571fc9283c716bba187c71f27a13a1c1530cc21792fd077d59ca414d9523c5ce"
+    },
+    {
+      "path": "reference/expected-results.json",
+      "bytes": 4581,
+      "sha256": "494612374d30b22171603d8a6c83c7f1870705ba64511bd4553a0d50d9bb68d1"
+    },
+    {
+      "path": "reference/review-guide.md",
+      "bytes": 2990,
+      "sha256": "65631d4c2c9fd030f4f1fc54ad834ef3a71057d2b1d01a4b03fe34d9df744ec9"
+    },
+    {
+      "path": "reference/source-ledger.json",
+      "bytes": 1062211,
+      "sha256": "af56c3383899cc702de869e51d66db8b28e5c6ba9bf6a356fa4a504014dd8d96"
+    }
+  ],
+  "self_excluded": true
+}
