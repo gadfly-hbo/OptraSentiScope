@@ -63,3 +63,16 @@
 首次提交 `b822576492d2b40d8f241c1443c5b85f3cc9ab0a` 已推送到指定远端 `main`；推送后实际查询本地 HEAD 与 GitHub `refs/heads/main` 一致，工作区干净。远端默认分支为 `main`，保留原有 PUBLIC 可见性。该次交付包含 8 个初始化文件。
 
 本小节为首次推送后的机械收尾记录，后续提交仅更新本文件中的清单及 Git 事实；最终交付身份与再次核验回执保留在 `.local/bootstrap/`，以实际 Git 引用为准。
+
+## Git／CI 规则再次核对（2026-11-11）
+
+用户要求本轮文档固化、推送及合并 main 的规则完全参考 OptraCall。通过 GitHub 连接器直接读取最新远端 `main` 固定提交 `15f40455083c144a185bed4aef6715c7891085dd`，未修改上游本机工作副本或仓库：
+
+| 来源 | 本轮直接核对内容 |
+| --- | --- |
+| [工程规范第4、5节](https://github.com/gadfly-hbo/OptraCall/blob/15f40455083c144a185bed4aef6715c7891085dd/docs/engineering-workflow.md) | 固定完整候选、非作者独立复核、相称检查、一个 PR、获授权 squash、快进本地 main、保护 WIP 及实际提交身份核对 |
+| [check.yml](https://github.com/gadfly-hbo/OptraCall/blob/15f40455083c144a185bed4aef6715c7891085dd/.github/workflows/check.yml) | 单任务 CI，所有 PR、main push 和手动触发；实际 head；Ubuntu／Node 25.9.0；锁文件安装、项目检查和高危级别依赖审计，无 docs-only 分支 |
+
+读取所得工程规范 Git blob 为 `1ae8a35ed212cf7681a100d091dc7cfac1a364c4`，工作流 blob 为 `65e88ab32fdafc5ed6662454f10739340ee05355`。源文件与只读核验回执保留在 `.local/blueprint-handoff-delivery/`；本次仅更新本项目工程规范的当前范围及第5节来源／适用说明，不把上游新增产品实现或历史授权搬入本项目。
+
+SentiScope 无包管理文件、产品代码和检查入口，直接复制该工作流无法运行。经说明后，用户明确选择：“本轮按纯文档规则合并，CI 记录未建立；产品搭建时复用同款 CI”。本轮不创建自创 CI、不引入 OptraCall 产品依赖、不将本地文档检查写成 CI PASS。通用产品搭建时再按上游同款工作流落实真实检查。此为本轮明确决定，不代表上游提供了文档豁免或后续检查可以自动省略。

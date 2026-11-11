@@ -1,0 +1,88 @@
+{
+  "package_id": "POC-ADULT-APPAREL-STORE-001",
+  "version": "0.1",
+  "created_on": "2026-11-11",
+  "user_approval_status": "pending_overall_review",
+  "data_nature": "100%人工构造的虚拟资料；无真实企业、客户、订单、凭据或模型运行结果",
+  "currency": "CNY",
+  "money_unit": "integer_fen",
+  "timezone": "Asia/Shanghai",
+  "entities": {
+    "brand": "POC-成人服饰品牌A",
+    "platform": "POC-虚拟平台P1",
+    "store": "POC-A店",
+    "owner": "虚拟电商业务负责人A"
+  },
+  "goal": {
+    "quarter": "2026Q3",
+    "start": "2026-07-01",
+    "end": "2026-09-30",
+    "comparison_quarter": "2025Q3",
+    "comparison_cutoff": "2025-10-15T23:59:59+08:00",
+    "comparison_net_sales_cents": 10000000,
+    "target_net_sales_cents": 12000000,
+    "target_growth_bps": 2000,
+    "gross_margin_floor_bps": 4800,
+    "marketing_budget_cents": 1800000,
+    "comparison_policy": "2025Q3在15天观察时点的净销售100000元作为本POC固定考核基准；未模拟其后修订。各轮须披露本期与基期观察长度，非同成熟度对比不表述为最终同比。"
+  },
+  "confirmed_user_principles": [
+    "成人服饰品牌单平台/店铺、负责人管理季度目标约束",
+    "确认收货时间归销售季度",
+    "净销售扣退款，退款回溯原订单季度并保留发生期",
+    "退款观察窗口长度15天",
+    "季度店铺整体商品毛利率下限，同时跟踪毛利额",
+    "Agent自主研究/方案/结果跟踪，经营行动由负责人决定执行"
+  ],
+  "poc_proposed_choices": {
+    "window_anchor": "季度结束次日开始，15个自然日；2026-10-01至2026-10-15，含末日",
+    "receipt_vs_cash": "本例仅以确认收货作为考核事件；平台结算、银行到账故意设为不同日期，不能等同",
+    "amount_basis": "统一不含税商品金额；运费收入、税费、平台补贴在本例均不模拟；goods_paid_amount已扣商家优惠",
+    "product_cost": "表中单件成本已含入库运输3元；全部商品成本齐备，沿原订单适用版本；不模拟正式会计分录",
+    "return_cost": "本例实物退回并确认收到时回转原商品销售成本；残损另有货损记录，经营贡献只扣一次；仅退款不回转成本",
+    "fee_policy": "佣金2%，完成退款后的实际返佣记录另计；支付手续费0.6%不返还。均为虚拟平台约定",
+    "fulfillment": "正向履约每单5元；实物退货逆向运费每件8元。采购入库运费已含商品成本，不重复列支",
+    "marketing": "广告及内容制作按服务消耗归季；不含商品折扣、平台交易佣金和支付手续费；合同未消耗部分占用预算",
+    "contribution": "按Q3订单关联商品成本、交易费用、正逆向履约和售后货损，另扣Q3实际营销消耗；仅为本POC管理观察口径",
+    "management_confirmation": "15天复评后，数据可核对且未决事项影响有说明时，可由负责人保留管理确认版；是否确认仅依据当轮可知业务事件判断，事实继续更新",
+    "material_revision": "目标达成/毛利底线/预算状态翻转，或净销售修订绝对值达到目标的2%，或毛利率变动至少1个百分点，列重大修订；即时提醒仍需结合当前决策窗口",
+    "undecided_refund": "未完成申请仅列风险；没有可靠估计时不生成预计最终退款额",
+    "shared_costs": "本例不含跨店/跨品牌共同费用；后续如加入需另明确分摊，不能任意按销售摊入"
+  },
+  "authorization": {
+    "allowed": "离线读取选定快照与口径，研究/计算/核验/方案建议/结果跟踪；此包本身不运行模型",
+    "excluded": [
+      "真实数据和凭据",
+      "真实Provider调用",
+      "安装/改造SDK",
+      "调价/投放/采购/退款等经营操作",
+      "对外联系或信息披露",
+      "产品实现及部署"
+    ]
+  },
+  "replay_snapshots": [
+    {
+      "snapshot_id": "Q3-INITIAL-0930",
+      "as_of": "2026-09-30T23:59:59+08:00",
+      "input_file": "replay-2026-09-30.json"
+    },
+    {
+      "snapshot_id": "Q3-REVIEW-1015",
+      "as_of": "2026-10-15T23:59:59+08:00",
+      "input_file": "replay-2026-10-15.json"
+    },
+    {
+      "snapshot_id": "Q3-LATEST-1022",
+      "as_of": "2026-10-22T23:59:59+08:00",
+      "input_file": "replay-2026-10-22.json"
+    }
+  ],
+  "replay_boundary": "仅向待测Agent提供scenario.json、call-context.json及当轮快照。reference和本包README仅供确认/复核，不给待测Agent；当前未实现运行时访问控制。",
+  "coverage_limits": [
+    "仅5个代表SKU，不代表完整行业商品体系",
+    "Q2/Q4边界订单仅供时间归属检查，不代表那些季度全量数据",
+    "基期用于净销售同比及商品成本核对，未提供基期营销/履约全量资料",
+    "库存只有事件快照与计划，不是完整实物库存账",
+    "人工构造的模式不能证明真实经营机制或产品增益"
+  ]
+}
