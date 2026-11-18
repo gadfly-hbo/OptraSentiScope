@@ -125,4 +125,5 @@ export class FollowupStore {
   });
  }
  sourceEvent(binding:RunBinding,event:Omit<FollowupSourceEvent,'observedAt'>&{observedAt?:string}):FollowupRecord[]{const normalized=this.#binding(binding);this.#current(normalized);return this.recordSourceEvent({...event,observedAt:event.observedAt??this.#now()},{goalRevision:normalized.goalRevision,epoch:normalized.epoch});}
+ sourceEventFact(eventId:string):FollowupSourceEvent&{goalRevision:number;epoch:number}|undefined{this.#store.scope(this.#scope.owner,this.#scope.delegationId);const row=this.#store.connection.prepare('SELECT * FROM followup_source_events WHERE namespace=? AND event_id=?').get(this.#namespace,text(eventId,500));return row?{eventId:row.event_id as string,sourceId:row.source_id as string,observedAt:row.observed_at as string,goalRevision:row.goal_revision as number,epoch:row.epoch as number}:undefined;}
 }

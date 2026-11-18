@@ -30,6 +30,9 @@ export interface ArtifactRevision extends ArtifactReference {
 }
 export interface SaveArtifact {readonly artifactId?:string;readonly expectedVersion:number;readonly requestId:string;readonly reason:string;readonly content:ArtifactContent;}
 export interface ArtifactMetadata extends ArtifactReference {readonly kind:ArtifactContent['kind'];readonly createdAt:string;readonly goalRevision:number;readonly epoch:number;readonly qualification:'current'|'historical'|'unavailable';readonly effect?:true;}
+export type ArtifactReassessment=
+ |{status:'qualified';revision:ArtifactRevision;accessQualification:'current'|'historical';useQualification:'current'|'historical';reassessmentDue:true;checkedAt:string}
+ |{status:'unavailable';artifactId:string;version:number;kind?:ArtifactContent['kind'];createdAt?:string;goalRevision?:number;epoch?:number;accessQualification:'unavailable';useQualification:'unavailable';reassessmentDue:true;restriction:string;unknowns:readonly string[];checkedAt:string};
 export interface ArtifactOptions {
  isCurrent(binding:RunBinding):boolean;verifyEvidence(binding:RunBinding,evidence:readonly ArtifactEvidence[]):Promise<void>;now?:()=>string;
  verifyEffect?(binding:RunBinding,effect:EffectAssessment):Promise<void>;
@@ -72,6 +75,8 @@ export class ArtifactStore {
    CREATE TABLE IF NOT EXISTS artifact_requests (delegation_id TEXT NOT NULL REFERENCES delegations(id),request_id TEXT NOT NULL,request_hash TEXT NOT NULL,artifact_id TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(delegation_id,request_id));
    CREATE TABLE IF NOT EXISTS artifact_effect_qualifications (delegation_id TEXT NOT NULL,artifact_id TEXT NOT NULL,version INTEGER NOT NULL,goal_revision INTEGER NOT NULL,epoch INTEGER NOT NULL,status TEXT NOT NULL,checked_at TEXT NOT NULL);
    CREATE INDEX IF NOT EXISTS artifact_effect_qualification_lookup ON artifact_effect_qualifications(delegation_id,artifact_id,version,goal_revision,epoch);`);
+  store.connection.exec(`CREATE TABLE IF NOT EXISTS artifact_reassessment_qualifications (delegation_id TEXT NOT NULL,artifact_id TEXT NOT NULL,version INTEGER NOT NULL,goal_revision INTEGER NOT NULL,epoch INTEGER NOT NULL,status TEXT NOT NULL,checked_at TEXT NOT NULL);
+   CREATE INDEX IF NOT EXISTS artifact_reassessment_qualification_lookup ON artifact_reassessment_qualifications(delegation_id,artifact_id,version,goal_revision,epoch);`);
  }
  #binding(binding:RunBinding):RunBinding{if(!binding||!binding.owner||binding.owner.enterpriseId!==this.#owner.enterpriseId||binding.owner.principalId!==this.#owner.principalId||binding.delegationId!==this.#delegationId||!Number.isSafeInteger(binding.goalRevision)||binding.goalRevision<1||!Number.isSafeInteger(binding.epoch)||binding.epoch<0||!Number.isSafeInteger(binding.generation)||binding.generation<1||!['main','worker'].includes(binding.role)||(binding.role==='worker'&&(typeof binding.assignmentId!=='string'||!binding.assignmentId.trim())))throw new StoreError('artifact_unqualified','成果读取或写入资格已失效。',409);return Object.freeze({owner:this.#owner,delegationId:this.#delegationId,goalRevision:binding.goalRevision,epoch:binding.epoch,generation:binding.generation,role:binding.role,...(binding.assignmentId?{assignmentId:binding.assignmentId}:{})});}
  #qualify(binding:RunBinding):void {const scope=this.#store.scope(this.#owner,this.#delegationId);let current=false;try{current=this.#options.isCurrent(binding)===true;}catch{}if(scope.lifecycle!=='active'||scope.goalRevision!==binding.goalRevision||!current)throw new StoreError('artifact_unqualified','成果读取或写入资格已失效。',409);}
@@ -85,6 +90,7 @@ export class ArtifactStore {
   this.#qualify(binding);if(!this.#effectCurrent(effect,binding))throw new StoreError('artifact_effect_unavailable','效果判断关联资格已变化。',409);
  }
  #markEffect(binding:RunBinding,value:ArtifactRevision,status:'qualified'|'unavailable'):void{if(effectOfContent(value.content))this.#store.connection.prepare('INSERT INTO artifact_effect_qualifications VALUES (?,?,?,?,?,?,?)').run(this.#delegationId,value.artifactId,value.version,binding.goalRevision,binding.epoch,status,this.#options.now?.()??new Date().toISOString());}
+ #markReassessment(binding:RunBinding,value:Pick<ArtifactRevision,'artifactId'|'version'>,status:'qualified'|'unavailable'):void{this.#store.connection.prepare('INSERT INTO artifact_reassessment_qualifications VALUES (?,?,?,?,?,?,?)').run(this.#delegationId,value.artifactId,value.version,binding.goalRevision,binding.epoch,status,this.#options.now?.()??new Date().toISOString());}
  #revision(ref:ArtifactReference):ArtifactRevision {const row=this.#store.connection.prepare('SELECT value FROM artifact_revisions WHERE delegation_id=? AND artifact_id=? AND version=?').get(this.#delegationId,ref.artifactId,ref.version);if(!row)throw new StoreError('artifact_not_found','未找到当前委托的准确成果版本。',404);return JSON.parse(row.value as string);}
  async save(binding:RunBinding,input:SaveArtifact):Promise<ArtifactRevision>{
   binding=this.#binding(binding);this.#qualify(binding);input=inputOf(input);const content=input.content;
@@ -108,6 +114,25 @@ export class ArtifactStore {
  async read(binding:RunBinding,ref:ArtifactReference):Promise<ArtifactRevision>{binding=this.#binding(binding);this.#qualify(binding);const value=this.#revision(referenceOf(ref)),effect=effectOfContent(value.content);if(value.goalRevision!==binding.goalRevision||(!effect&&value.epoch!==binding.epoch))throw new StoreError('artifact_historical','历史成果须按当前目标和资料资格重新建立依据。',409);if(effect&&binding.role!=='main')throw new StoreError('artifact_effect_role','只有主Agent可保存或读取经营效果判断。',403);try{await this.#verifyContent(binding,value.content);this.#store.withTransaction(()=>{this.#qualify(binding);if(effect&&!this.#effectCurrent(effect,binding))throw new StoreError('artifact_effect_unavailable','效果判断读回前关联资格已变化。',409);this.#markEffect(binding,value,'qualified');});return structuredClone(value);}catch(error){this.#markEffect(binding,value,'unavailable');throw error;}}
  /** Outcome facts retain the selected original plan; all of its exact sources must still be authorized now. */
  async readForOutcome(binding:RunBinding,ref:ArtifactReference):Promise<ArtifactRevision>{binding=this.#binding(binding);this.#qualify(binding);if(binding.role!=='main')throw new StoreError('artifact_role','仅主Agent可核对经营结果关联。',403);const value=this.#revision(referenceOf(ref));if(value.kind!=='plan'||value.goalRevision!==binding.goalRevision)throw new StoreError('artifact_historical','结果关联须属于当前目标的准确原方案。',409);await this.#verify(binding,value.content.evidence);return structuredClone(value);}
+ /** Exact-body re-assessment is the only ordinary cross-epoch read path; ordinary read stays epoch-bound. */
+ async reassessment(inputBinding:RunBinding,inputRef:ArtifactReference):Promise<ArtifactReassessment>{
+  const now=()=>this.#options.now?.()??new Date().toISOString();
+  let binding:RunBinding,value:ArtifactRevision|undefined;
+  try{
+   binding=this.#binding(inputBinding);const ref=referenceOf(inputRef);this.#qualify(binding);value=this.#revision(ref);
+   if(value.kind==='judgment'&&effectOfContent(value.content))throw new StoreError('artifact_effect_path','经营效果判断必须沿既有效果专用路径重核。',409);
+   if(value.goalRevision!==binding.goalRevision)throw new StoreError('artifact_goal_scope','待复核成果不属于当前目标。',409);
+   await this.#verify(binding,value.content.evidence);
+   this.#store.withTransaction(()=>{this.#qualify(binding!);this.#markReassessment(binding!,value!,'qualified');});
+   const latest=this.#store.connection.prepare('SELECT version,value->>\'$.goalRevision\' AS goal_revision,value->>\'$.epoch\' AS epoch FROM artifact_revisions WHERE delegation_id=? AND artifact_id=? ORDER BY version DESC LIMIT 1').get(this.#delegationId,value.artifactId);
+   const current=latest?.version===value.version&&latest?.goal_revision===binding.goalRevision&&latest?.epoch===binding.epoch;
+   return structuredClone({status:'qualified' as const,revision:value,accessQualification:value.epoch===binding.epoch?'current':'historical',useQualification:current?'current':'historical',reassessmentDue:true as const,checkedAt:now()});
+  }catch(error){
+   if(value){const b:RunBinding=binding!,v:ArtifactRevision=value;this.#store.withTransaction(()=>{try{this.#markReassessment(b,v,'unavailable');}catch{/* Keep the read failure; receipt persistence must not fabricate access. */}});}
+   const code=error instanceof StoreError?error.code:'artifact_reassessment_unavailable';
+   return{status:'unavailable',artifactId:inputBinding&&typeof inputRef==='object'&&inputRef?.artifactId?inputRef.artifactId:'',version:inputRef?.version??0,...(value?{kind:value.kind,createdAt:value.createdAt,goalRevision:value.goalRevision,epoch:value.epoch}:{}),accessQualification:'unavailable',useQualification:'unavailable',reassessmentDue:true,restriction:code,unknowns:['The exact original body cannot be re-established under current authorization; no latest version may replace it.'],checkedAt:now()};
+  }
+ }
  async list(binding:RunBinding):Promise<readonly ArtifactMetadata[]>{
   binding=this.#binding(binding);this.#qualify(binding);
   const rows=this.#store.connection.prepare("SELECT artifact_id,version,value->>'$.kind' AS kind,value->>'$.createdAt' AS created_at,value->>'$.goalRevision' AS goal_revision,value->>'$.epoch' AS epoch,value->>'$.content.effect' AS effect FROM artifact_revisions WHERE delegation_id=? ORDER BY rowid DESC LIMIT 100").all(this.#delegationId);
@@ -122,6 +147,10 @@ export class ArtifactStore {
  /** Host-only business association across native handle generations; not an Agent read authorization. */
  isCurrentBusinessReference(ref:ArtifactReference,qualification:{goalRevision:number;epoch:number}):boolean{
   try{const scope=this.#store.scope(this.#owner,this.#delegationId);if(!Number.isSafeInteger(qualification.goalRevision)||qualification.goalRevision<1||!Number.isSafeInteger(qualification.epoch)||qualification.epoch<0||scope.goalRevision!==qualification.goalRevision)return false;ref=referenceOf(ref);const row=this.#store.connection.prepare("SELECT version,value->>'$.goalRevision' AS goal_revision,value->>'$.epoch' AS epoch FROM artifact_revisions WHERE delegation_id=? AND artifact_id=? ORDER BY version DESC LIMIT 1").get(this.#delegationId,ref.artifactId);return Boolean(row&&row.version===ref.version&&row.goal_revision===qualification.goalRevision&&row.epoch===qualification.epoch);}catch{return false;}
+ }
+ /** Exact latest advice identity for pending cognition work; source eligibility is checked separately. */
+ isCurrentGoalReference(ref:ArtifactReference,goalRevision:number):boolean{
+  try{this.#store.scope(this.#owner,this.#delegationId);ref=referenceOf(ref);const row=this.#store.connection.prepare("SELECT version,value->>'$.goalRevision' AS goal_revision FROM artifact_revisions WHERE delegation_id=? AND artifact_id=? ORDER BY version DESC LIMIT 1").get(this.#delegationId,ref.artifactId);return Boolean(row&&row.version===ref.version&&row.goal_revision===goalRevision);}catch{return false;}
  }
  history():readonly ArtifactRevision[]{this.#store.scope(this.#owner,this.#delegationId);return this.#store.connection.prepare('SELECT value FROM artifact_revisions WHERE delegation_id=? ORDER BY rowid').all(this.#delegationId).map(row=>JSON.parse(row.value as string));}
 }

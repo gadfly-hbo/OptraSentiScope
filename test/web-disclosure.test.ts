@@ -95,6 +95,15 @@ test('results preserve exact chosen plan and independent scopes while execution 
  const before=ui.requests();await ui.tick();assert.ok(ui.requests()>=before+2);assert.ok(ui.screen.innerHTML.includes('实际只执行范围 A 的一部分'));
 });
 
+test('results show evidence-driven cognition corrections and pending plan re-evaluations without replaying withdrawn bodies',async()=>{
+  const cognition:any={supportRelations:[{id:'support-one',revision:1,status:'active',judgment:{artifactId:'judgment-one',version:1},plan:{artifactId:'plan-one',version:1},scope:'仅限声明范围',why:'J1 is the key mechanism precondition',goalRevision:1,epoch:1}],reviews:[{id:'review-one',judgment:{artifactId:'judgment-one',version:1},resultJudgment:{artifactId:'judgment-one',version:2},trigger:{kind:'source_event',eventId:'event-one',sourceId:'source-one',observedAt:'2026-11-17T01:00:00.000Z'},conclusion:'revised',summary:'反证改变了机制认识',changes:['适用范围收窄'],limitations:['不能归因经营改善'],unknowns:['P2 条件未知'],nextReview:{condition:'待P1与P2重评后复查'},goalRevision:1,epoch:1}],reevaluations:[{id:'task-one',reviewId:'review-one',relation:{id:'support-one',revision:1},judgment:{artifactId:'judgment-one',version:1},plan:{artifactId:'plan-one',version:1},status:'pending',binding:{goalRevision:1,epoch:1}},{id:'task-two',reviewId:'review-one',relation:{id:'support-two',revision:1},judgment:{artifactId:'judgment-one',version:1},plan:{artifactId:'plan-two',version:1},status:'completed',result:{conclusion:'limit',reason:'建议适用性需要收窄',nextSteps:['发布新版建议'],unknowns:['新条件未知']},binding:{goalRevision:1,epoch:1}}],pendingReevaluations:[]};
+  const ui=await workspace({cognition});await ui.navigate('delegation-one','results');const html=ui.screen.innerHTML;
+  assert.ok(html.includes('反证与建议重评'));assert.ok(html.includes('反证改变了机制认识'));assert.ok(html.includes('待重评建议（1）'));assert.ok(html.includes('plan-one @ v1'));assert.ok(html.includes('建议适用性需要收窄'));assert.ok(html.includes('待P1与P2重评后复查'));assert.ok(html.includes('J1 is the key mechanism precondition'));
+  assert.equal(html.includes('<form'),false);assert.equal(html.includes('data-action="decision-adopt"'),false);
+  cognition.reviews[0]={...cognition.reviews[0],summary:'WITHDRAWN_COGNITION_BODY',qualification:'unavailable'};cognition.supportRelations[0]={...cognition.supportRelations[0],why:'WITHDRAWN_SUPPORT_BODY',qualification:'unavailable'};
+  await ui.tick();const protectedHtml=ui.screen.innerHTML;assert.equal(protectedHtml.includes('WITHDRAWN_COGNITION_'),false);assert.equal(protectedHtml.includes('WITHDRAWN_SUPPORT_'),false);assert.ok(protectedHtml.includes('资格已变化的认识记录（2）'));
+});
+
 test('an observation stays linked to its exact older execution revision while disclosed history survives refresh and version updates',async()=>{
  const feed={choices:[outcomeChoice],executions:[{...executionFixture,latest:false},{...executionFixture,revision:2,extent:'执行范围后来扩大，但旧观察不转移',latest:true}],observations:[observationFixture]};const ui=await workspace({outcomeFeed:feed});await ui.navigate('delegation-one','results');
  assert.ok(ui.screen.innerHTML.includes('对应执行 execution-one @ r1'));assert.ok(ui.screen.innerHTML.includes('执行范围后来扩大，但旧观察不转移'));

@@ -99,6 +99,7 @@ export class SourceStore {
   }
   grantsRevision(): number { this.#scope(); return (this.#store.connection.prepare('SELECT grants_epoch AS n FROM source_scopes WHERE namespace=?').get(this.#ns) as { n: number }).n; }
   qualificationEpoch(): number { this.#scope(); return (this.#store.connection.prepare('SELECT qualification_epoch AS n FROM source_scopes WHERE namespace=?').get(this.#ns) as { n: number }).n; }
+  events(limit = 100): SourceEvent[] { this.#scope(); return this.#store.connection.prepare('SELECT payload FROM source_events WHERE namespace=? ORDER BY rowid DESC LIMIT ?').all(this.#ns, Math.max(1, Math.min(limit, 100))).map(row => JSON.parse(row.payload as string)).reverse(); }
   #bump() { this.#store.connection.prepare('UPDATE source_scopes SET qualification_epoch=qualification_epoch+1 WHERE namespace=?').run(this.#ns); }
   coverage(): SourceCoverage[] {
     this.#scope(); return this.#rows().map((row) => ({ sourceId: row.source_id, status: row.status, grantRevision: (JSON.parse(row.config) as NormalGrant).grantRevision, lastCheckedAt: row.checked_at, reason: row.reason }));
