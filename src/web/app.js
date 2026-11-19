@@ -49,7 +49,13 @@ function notificationContent(feed, item, overview = false) {
   }).join('');
   return `${briefText}${cards}${held ? '<p class="secondary">所引事项版本或资料资格已变化，原简报或事项正文当前不可用；请以当前获准依据为准。</p>' : ''}${!briefText && !cards && !held ? '<p class="alert-empty">尚无已保存的工作日简报或重要提醒。</p>' : ''}<p class="scope-line">站内展示不表示经营者已读或采纳；独立研究继续，实际选择另行记录。</p>`;
 }
-function notificationPanel(item) { return `<section class="subtle-panel" data-notification-feed><h2>简报与站内提醒</h2>${notificationContent(state.detail?.notificationFeed, item)}</section>`; }
+function notificationPanel(item) { return `<section class="subtle-panel" data-notification-feed><h2>简报与站内提醒</h2>${notificationContent(state.detail?.notificationFeed, item)}${preferencesForm()}</section>`; }
+function preferencesForm() {
+  const preferences = state.detail?.notificationPreferences;
+  if (!preferences) return '';
+  const weekdays = [1,2,3,4,5,6,7];
+  return `<details class="history-disclosure"><summary>简报偏好</summary><form id="preferences-form" data-revision="${escapeText(preferences.revision)}"><div class="field"><label for="preference-time">发送时间</label><input id="preference-time" name="time" type="time" value="${escapeText(preferences.time.slice(0,5))}" required></div><div class="field"><label for="preference-timezone">时区</label><input id="preference-timezone" name="timeZone" value="${escapeText(preferences.timeZone)}" required></div><fieldset><legend>星期</legend><div class="checkbox-row">${weekdays.map(day => `<label class="checkbox"><input type="checkbox" name="weekdays" value="${day}" ${preferences.weekdays.includes(day) ? 'checked' : ''}><span>${(['','周一','周二','周三','周四','周五','周六','周日'])[day]}</span></label>`).join('')}</div></fieldset><p class="meta">偏好只影响站内汇总，不限制研究节奏。</p><div class="actions"><button class="primary" type="submit">保存偏好</button></div></form></details>`;
+}
 function recordState(value) {
   return ({ pending: '等待执行', running: '执行中', ended: '已收束', progress: '继续研究', waiting: '等待信息', ready: '报告就绪', blocked: '受阻', failed: '失败', dropped: '无须继续', completed: '已完成', stopped: '已停止', saved: '已保存', recorded: '已记录', delivered: '已送达', unavailable: '不可用', revoked: '已撤权' })[value] || value || '尚未记录';
 }
@@ -220,7 +226,8 @@ function lifecycleNotice(item) {
 
 function detail(item) {
   const writable = canWrite();
-  const actions = isEditable(item) ? `${button('edit', '调整委托', writable ? '' : 'disabled')}${button(item.lifecycle === 'paused' ? 'resume' : 'pause', item.lifecycle === 'paused' ? '恢复' : '暂停', `${item.lifecycle === 'paused' ? 'class="primary"' : ''} ${writable ? '' : 'disabled'}`)}${button('end', '结束委托', `class="ghost danger" title="收束待决并保留历史，不记采纳或拒绝" ${writable ? '' : 'disabled'}`)}` : item.lifecycle === 'resuming' ? button('end', '结束委托', `class="ghost danger" title="收束待决并保留历史，不记采纳或拒绝" ${writable ? '' : 'disabled'}`) : item.lifecycle === 'ended' ? button('related', '新建关联委托', `class="primary" ${writable ? '' : 'disabled'}`) : '';
+  const lifecycleControl = item.lifecycle === 'active' && state.detail?.lifecycleControls ? button('research-control', '研究控制', writable ? '' : 'disabled') : '';
+  const actions = isEditable(item) ? `${button('edit', '调整委托', writable ? '' : 'disabled')}${lifecycleControl}${button(item.lifecycle === 'paused' ? 'resume' : 'pause', item.lifecycle === 'paused' ? '恢复' : '暂停', `${item.lifecycle === 'paused' ? 'class="primary"' : ''} ${writable ? '' : 'disabled'}`)}${button('end', '结束委托', `class="ghost danger" title="收束待决并保留历史，不记采纳或拒绝" ${writable ? '' : 'disabled'}`)}` : item.lifecycle === 'resuming' ? button('end', '结束委托', `class="ghost danger" title="收束待决并保留历史，不记采纳或拒绝" ${writable ? '' : 'disabled'}`) : item.lifecycle === 'ended' ? button('related', '新建关联委托', `class="primary" ${writable ? '' : 'disabled'}`) : '';
   return `${button('overview', '← 委托总览', 'class="text-button back-link"')}<div class="page-heading detail-heading"><div><div class="heading-label">持续委托 · 委托 v${escapeText(item.goalRevision)}</div><h1>${escapeText(title(item))}</h1>${badge(lifecycleLabels[item.lifecycle] || '状态待核实', item.lifecycle === 'active' ? 'accent' : '')}<p class="goal">${escapeText(item.goal)}</p></div><div class="actions">${actions}</div></div>
   <div class="state-strip"><span>研究<strong>${escapeText(researchLabel(item))}</strong></span><span>资料<strong>${escapeText(sourceSummary())}</strong></span><span class="call-note">Call <strong>待接入</strong></span></div>${lifecycleNotice(item)}
   <div class="tabs" role="tablist" aria-label="委托内容">${tabs.map(([id, label]) => `<button class="tab" id="tab-${id}" role="tab" aria-selected="${state.tab === id}" aria-controls="tabpanel" tabindex="${state.tab === id ? '0' : '-1'}" data-action="tab" data-tab="${id}">${label}</button>`).join('')}</div>
@@ -230,7 +237,21 @@ function detail(item) {
 function progress(item) {
   const tickets = records('research');
   const following = ['following', 'running', 'researching', 'waiting', 'idle', 'ready'].includes(item.research?.status);
-  return `<div class="detail-grid"><div class="main-column">${currentJudgment()}${notificationPanel(item)}<section><div class="section-heading"><h2>当前研究重点</h2><span class="meta">方法与优先级由 Agent 自主决定</span></div>${tickets.length ? `<ol class="research-records">${tickets.map(ticket=>ticketCard(ticket,item)).join('')}</ol>` : `<div class="subtle-panel"><h3>${escapeText(researchLabel(item))}</h3><p>当前尚无可核实的研究工单；运行限制与业务资料缺口分别记录。</p></div>`}</section><section class="subtle-panel"><div class="section-heading"><h2>下一步</h2></div><p>${item.lifecycle === 'ended' ? '本委托已结束。继续工作时可新建关联委托，重新核对资料与授权。' : item.lifecycle === 'paused' ? '已有目标和记录保持可见。收到恢复意图后，Host 会先核对当前资格。' : item.lifecycle === 'resuming' ? '等待当前运行资格核对；尚未续作，不重放未知操作。' : ['pausing', 'ending'].includes(item.lifecycle) ? '等待 Host 核对停止事实，期间不派发新研究。' : following ? 'Host 已启用持续跟进；研究执行和判断以工单、报告记录为准。无需保持此页面打开，新进展会随保存的记录更新。' : '等待当前运行限制处理。已有目标和补充资料会保留，无需重复录入。'}</p>${followupList(item)}<p class="scope-line">委托边界：${escapeText(item.boundary || '未补充额外偏好；当前仅研究与建议，经营动作由负责人决定。')}</p></section>${versionHistory(item)}${technicalDetails()}</div><aside class="side-column"><section class="panel"><h2>资料覆盖</h2>${coverageMini()}<div class="source-mini"><div class="source-heading"><span>Call</span>${badge('待接入')}</div><p>只读接缝开发后排，当前未读取 Call 资产。</p></div></section><section class="panel"><h2>最近记录</h2>${activity(item)}</section></aside></div>`;
+  return `<div class="detail-grid"><div class="main-column">${currentJudgment()}${intakeSummaryPanel()}${lifecycleControlsPanel()}${notificationPanel(item)}<section><div class="section-heading"><h2>当前研究重点</h2><span class="meta">方法与优先级由 Agent 自主决定</span></div>${tickets.length ? `<ol class="research-records">${tickets.map(ticket=>ticketCard(ticket,item)).join('')}</ol>` : `<div class="subtle-panel"><h3>${escapeText(researchLabel(item))}</h3><p>当前尚无可核实的研究工单；运行限制与业务资料缺口分别记录。</p></div>`}</section><section class="subtle-panel"><div class="section-heading"><h2>下一步</h2></div><p>${item.lifecycle === 'ended' ? '本委托已结束。继续工作时可新建关联委托，重新核对资料与授权。' : item.lifecycle === 'paused' ? '已有目标和记录保持可见。收到恢复意图后，Host 会先核对当前资格。' : item.lifecycle === 'resuming' ? '等待当前运行资格核对；尚未续作，不重放未知操作。' : ['pausing', 'ending'].includes(item.lifecycle) ? '等待 Host 核对停止事实，期间不派发新研究。' : following ? 'Host 已启用持续跟进；研究执行和判断以工单、报告记录为准。无需保持此页面打开，新进展会随保存的记录更新。' : '等待当前运行限制处理。已有目标和补充资料会保留，无需重复录入。'}</p>${followupList(item)}<p class="scope-line">委托边界：${escapeText(item.boundary || '未补充额外偏好；当前仅研究与建议，经营动作由负责人决定。')}</p></section>${versionHistory(item)}${technicalDetails()}</div><aside class="side-column"><section class="panel"><h2>资料覆盖</h2>${coverageMini()}<div class="source-mini"><div class="source-heading"><span>Call</span>${badge('待接入')}</div><p>只读接缝开发后排，当前未读取 Call 资产。</p></div></section><section class="panel"><h2>最近记录</h2>${activity(item)}</section></aside></div>`;
+}
+
+function intakeSummaryPanel() {
+  const intake = state.detail?.intake || {}; const summary = intake.summary; const questions = Array.isArray(intake.pendingQuestions) ? intake.pendingQuestions : [];
+  if (!summary) return '';
+  if (!summary.content) return '<section class="subtle-panel"><div class="section-heading"><h2>委托摘要</h2><span class="meta">待重核</span></div><p class="secondary">旧摘要需按当前来源资格重新核对；正文暂不回放。</p></section>';
+  return `<section class="subtle-panel"><div class="section-heading"><h2>委托摘要</h2><span class="meta">v${escapeText(summary.revision)} · ${escapeText(summary.qualification || 'current')}</span></div><p class="record-body">${escapeText(summary.content.objective)}</p><dl class="definition-list"><div><dt>事实</dt><dd>${textList(summary.content.facts, '未从获准资料补入业务事实')}</dd></div><div><dt>假设</dt><dd>${textList(summary.content.assumptions, '未列假设')}</dd></div><div><dt>授权与边界</dt><dd>${textList([...summary.content.researchAuthorization, ...summary.content.businessBoundary], '未列额外边界')}</dd></div><div><dt>评价与后续</dt><dd>${textList([...summary.content.evaluation, ...summary.content.followUp], '未列评价安排')}</dd></div></dl>${questions.length ? `<div class="section-actions"><h3>集中待澄清</h3><ul class="plain-list">${questions.map(question => `<li><strong>${escapeText(question.question)}</strong><p class="record-body">${escapeText(question.impact)}</p><span class="meta">影响范围：${escapeText(question.blockingScopes.join('；'))} · 其他研究继续</span></li>`).join('')}</ul></div>` : ''}${button('tab', '补充或纠正摘要 →', 'class="text-button" data-tab="conversation"')}</section>`;
+}
+
+function lifecycleControlsPanel() {
+  const control = state.detail?.lifecycleControls;
+  if (!control) return '';
+  const status = control.status; const plans = Array.isArray(control.plans) ? control.plans : [];
+  return `<section class="subtle-panel"><div class="section-heading"><h2>研究控制</h2><span class="meta">采集与研究分开</span></div><p class="secondary">${status.researchPaused ? `研究暂停中；获准采集继续。${status.pausedScopes.length ? `暂停方向：${escapeText(status.pausedScopes.join('、'))}。` : '全部研究方向等待恢复。'}` : '研究按授权继续；未暂停方向不受其他局部等待影响。'}</p>${plans.length ? `<details class="history-disclosure"><summary>约定恢复／结束（${plans.length}）</summary><ul class="plain-list">${plans.map(plan => `<li class="meta">${plan.kind === 'resume' ? '恢复' : '结束'} · ${time(plan.at)}<br>${escapeText(plan.reason)} · ${escapeText(plan.status)}</li>`).join('')}</ul></details>` : ''}</section>`;
 }
 
 function ticketCard(ticket, item) {
@@ -330,6 +351,18 @@ function cognitionCorrections() {
   const supportHtml = currentSupports.length ? `<details class="history-disclosure" data-disclosure="cognition-supports"><summary>显式支持关系（${currentSupports.length}）</summary><ul class="plain-list">${currentSupports.map((entry) => `<li class="meta">${reference(entry.judgment)} → ${reference(entry.plan)} · ${escapeText(entry.scope)}<br>${escapeText(entry.why)}</li>`).join('')}</ul></details>` : '';
   return `<section class="section-actions"><div class="section-heading"><h2>反证与建议重评</h2><span class="meta">同一委托内修正</span></div><p class="secondary">证据变化、认识修正和建议重评分别记录；旧采纳、执行和观察不迁移到新建议。</p>${pending.length ? `<p class="scope-line">待重评建议（${pending.length}）：${pending.map((entry) => reference(entry.plan)).join('、')}</p>` : ''}${reviewHtml || taskHtml ? `<ol class="research-records section-actions">${reviewHtml}${taskHtml}</ol>` : ''}${supportHtml}${unavailable.length ? `<details class="history-disclosure" data-disclosure="cognition-unavailable"><summary>资格已变化的认识记录（${unavailable.length}）</summary><p class="secondary">只保留准确版本索引；旧判断、理由和依赖说明不回放。</p><ul class="plain-list">${unavailable.map((entry) => `<li class="meta">${entry.plan ? `建议 ${reference(entry.plan)}` : entry.judgment ? `判断 ${reference(entry.judgment)}` : `记录 ${escapeText(entry.id)}`}</li>`).join('')}</ul></details>` : ''}</section>`;
 }
+function reusableExperiences() {
+  const feed = state.detail?.experiences || {}; const entries = Array.isArray(feed.experiences) ? feed.experiences : []; const uses = Array.isArray(feed.uses) ? feed.uses : [];
+  const current = entries.filter((entry) => entry.qualification === 'current');
+  const unavailable = entries.filter((entry) => entry.qualification !== 'current');
+  const currentUses = uses.filter((entry) => entry.qualification !== 'unavailable');
+  if (!entries.length && !uses.length) return '<div class="empty-state compact"><h2>尚无可复用经验</h2><p>经验需要相称证据、适用条件和限制。反证与原判断将保留，不因采纳或重复报告证明正确。</p></div>';
+  const status = ({ active: '可复用', limited: '已限缩', withdrawn: '已撤回' });
+  const cards = current.map((entry) => `<li class="research-record"><div class="record-heading"><h3>${escapeText(entry.title)}</h3><div class="actions">${badge(`经验 v${entry.version}`)}${badge(status[entry.status] || entry.status, entry.status === 'active' ? 'accent' : 'warning')}</div></div><p class="record-body">${escapeText(entry.summary)}</p><p class="meta">来源委托 ${escapeText(entry.sourceDelegationId)} · 有效期至 ${time(entry.validUntil)}</p><details class="history-disclosure" data-disclosure="${disclosureKey('experience', entry.id, entry.version)}"><summary>适用条件、限制与复验</summary><div class="section-actions"><h4>适用条件</h4>${textList(entry.businessConditions, '未声明适用条件；不得泛化')}</div><div class="section-actions"><h4>限制</h4>${textList(entry.limitations, '未列额外限制')}</div><div class="section-actions"><h4>反例</h4>${entry.counterexamples?.length ? evidenceList(entry.counterexamples) : '<p class="secondary">暂无已保存反例。</p>'}</div><div class="section-actions"><h4>仍未知与复验</h4>${textList(entry.unknowns, '未列额外未知')}<p class="secondary">复验条件：${escapeText(entry.revalidateWhen?.condition || '未记录')}</p></div></details></li>`).join('');
+  const useHtml = currentUses.length ? `<details class="history-disclosure" data-disclosure="experience-uses"><summary>实际调用与拒用（${currentUses.length}）</summary><ul class="plain-list">${currentUses.map((entry) => `<li class="meta">${escapeText(({ applied: '已调用', not_applied: '未采用', unknown: '适用未知' })[entry.decision] || entry.decision)} · 经验 ${escapeText(entry.experience?.id)} @ v${escapeText(entry.experience?.version)}<br>${escapeText(entry.influence)}<br>${escapeText(entry.reason)} · ${time(entry.createdAt)}</li>`).join('')}</ul></details>` : '';
+  const unavailableHtml = unavailable.length ? `<details class="history-disclosure" data-disclosure="experience-unavailable"><summary>过期或资格变化的经验（${unavailable.length}）</summary><p class="secondary">只保留准确版本索引；旧结论、条件和依赖说明不在当前投影回放。</p><ul class="plain-list">${unavailable.map((entry) => `<li class="meta">${escapeText(entry.title)} · ${entry.id} @ v${entry.version} · ${escapeText(({ expired: '已过期', historical: '历史版本', unavailable: '来源不可用' })[entry.qualification] || entry.qualification)}</li>`).join('')}</ul></details>` : '';
+  return `<section class="section-actions"><div class="section-heading"><h2>可复用经验</h2><span class="meta">条件化背景</span></div><p class="secondary">经验使用不是独立证据；重复报告、采纳或短期改善不自动升级结论。</p>${cards ? `<ol class="research-records section-actions">${cards}</ol>` : '<p class="secondary">当前没有可回放正文的适用经验。</p>'}${useHtml}${unavailableHtml}</section>`;
+}
 function results() {
   const feed = state.detail?.outcomeFeed || {}; const executions = Array.isArray(feed.executions) ? feed.executions : []; const observations = Array.isArray(feed.observations) ? feed.observations : [];
   const choices = (Array.isArray(feed.choices) ? feed.choices : []).filter((choice) => choice.qualification === 'current');
@@ -348,7 +381,7 @@ function results() {
   const unavailable = [...executions, ...observations].filter((entry) => entry.qualification !== 'current');
   const unavailableEffects = records('effectAssessments').filter((entry) => entry.qualification !== 'current');
   const effectIndex = unavailableEffects.length ? `<details class="history-disclosure section-actions" data-disclosure="effect-unavailable"><summary>资格已变化的效果判断（${unavailableEffects.length}）</summary><p class="secondary">只保留准确版本索引；旧结论、范围、解释及来源当前不可用，重新核对前不回放。</p><ul class="plain-list">${unavailableEffects.map((entry) => `<li class="meta">效果判断 ${escapeText(entry.artifactId)} @ v${escapeText(entry.version)} · ${time(entry.createdAt)}</li>`).join('')}</ul></details>` : '';
-  return `<div class="section-heading"><h2>选择、执行、观察、归因</h2><span class="meta">四项独立记录</span></div>${groupHtml || '<div class="empty-state compact"><h2>尚无当前可展示的结果记录</h2><p>负责人明确选择、实际执行、经营观察与效果归因分别保存。</p></div>'}${unavailable.length ? `<details class="history-disclosure section-actions" data-disclosure="outcome-unavailable"><summary>资格已变化的结果记录（${unavailable.length}）</summary><p class="secondary">只保留准确记录索引，旧范围、正文和来源不在当前投影回放。</p><ul class="plain-list">${unavailable.map((entry) => `<li class="meta">${entry.kind === 'execution' ? '执行' : '观察'} ${escapeText(entry.id)} @ r${escapeText(entry.revision)} · 方案 ${escapeText(entry.artifact?.artifactId)} @ v${escapeText(entry.artifact?.version)} · ${time(entry.createdAt)}</li>`).join('')}</ul></details>` : ''}${effectIndex}${cognitionCorrections()}<div class="empty-state compact"><h2>尚无可复用经验</h2><p>经验需要相称证据、适用条件和限制。反证与原判断将保留，不因采纳或重复报告证明正确。</p></div>`;
+  return `<div class="section-heading"><h2>选择、执行、观察、归因</h2><span class="meta">四项独立记录</span></div>${groupHtml || '<div class="empty-state compact"><h2>尚无当前可展示的结果记录</h2><p>负责人明确选择、实际执行、经营观察与效果归因分别保存。</p></div>'}${unavailable.length ? `<details class="history-disclosure section-actions" data-disclosure="outcome-unavailable"><summary>资格已变化的结果记录（${unavailable.length}）</summary><p class="secondary">只保留准确记录索引，旧范围、正文和来源不在当前投影回放。</p><ul class="plain-list">${unavailable.map((entry) => `<li class="meta">${entry.kind === 'execution' ? '执行' : '观察'} ${escapeText(entry.id)} @ r${escapeText(entry.revision)} · 方案 ${escapeText(entry.artifact?.artifactId)} @ v${escapeText(entry.artifact?.version)} · ${time(entry.createdAt)}</li>`).join('')}</ul></details>` : ''}${effectIndex}${cognitionCorrections()}${reusableExperiences()}`;
 }
 function sources() {
   const coverage = records('sources'); const refs = records('sourceReferences');
@@ -439,6 +472,10 @@ function editDialog() {
   const item = current();
   openDialog(`${dialogHeading('调整委托', `当前目标 v${escapeText(item.goalRevision)}；旧目标与历史保留。`)}<form id="edit-form" data-version="${escapeText(item.version)}"><div class="dialog-body"><div class="field"><label for="edit-goal">持续目标</label><textarea id="edit-goal" name="goal" aria-describedby="edit-error" autofocus>${escapeText(item.goal)}</textarea><span class="error" id="edit-error"></span></div><div class="field"><label for="edit-boundary">边界与偏好</label><textarea id="edit-boundary" name="boundary">${escapeText(item.boundary || '')}</textarea></div><p class="meta">调整不会改变原方案选择、执行或归因记录。</p><p class="error" id="save-error" role="alert"></p></div><div class="dialog-footer">${button('close-dialog', '取消', 'type="button"')}<button class="primary" type="submit">保存调整</button></div></form>`);
 }
+function lifecycleDialog() {
+  const control = state.detail?.lifecycleControls?.status ?? { revision: 0, researchPaused: false, pausedScopes: [] };
+  openDialog(`${dialogHeading('研究控制', '可暂停指定研究方向并保留获准采集；也可约定恢复或结束时间。')}<form id="lifecycle-form" data-revision="${escapeText(control.revision)}"><div class="dialog-body"><div class="field"><label for="lifecycle-action">动作</label><select id="lifecycle-action" name="action"><option value="pause">暂停研究</option><option value="resume">恢复研究</option><option value="schedule_resume">约定恢复</option><option value="schedule_end">约定结束</option></select></div><div class="field"><label for="lifecycle-mode">范围</label><select id="lifecycle-mode" name="mode"><option value="direction">指定方向</option><option value="all">全部研究</option></select></div><div class="field"><label for="lifecycle-scope">方向名称</label><input id="lifecycle-scope" name="scope" value="${escapeText(control.pausedScopes[0] || '')}"><span class="helper">仅暂停匹配该名称的工单方向；采集继续。</span></div><div class="field"><label for="lifecycle-at">约定时间</label><input id="lifecycle-at" name="at" type="datetime-local"></div><div class="field"><label for="lifecycle-reason">原因</label><textarea id="lifecycle-reason" name="reason" required></textarea></div><p class="meta">当前暂停方向：${control.pausedScopes.length ? escapeText(control.pausedScopes.join('、')) : '无'}。恢复不影响未列出的独立研究。</p><p class="error" id="save-error" role="alert"></p></div><div class="dialog-footer">${button('close-dialog', '取消', 'type="button"')}<button class="primary" type="submit">保存控制</button></div></form>`);
+}
 function decisionDialog(entry) {
   const key = decisionDraftKey(entry);
   openDialog(`${dialogHeading(`回应方案 v${escapeText(entry.artifact.version)} 的待决事项`, '一句话说明你的选择及范围。原话会保存，明确的意思和范围不要求重复确认。')}<form id="decision-reply-form" ${decisionAttributes(entry)} data-draft-key="${escapeText(key)}"><div class="dialog-body"><p class="record-body">${escapeText(entry.question)}</p><div class="field"><label for="decision-note">你的选择或调整意见</label><textarea id="decision-note" name="text" aria-describedby="decision-help decision-error" autofocus>${escapeText(decisionDrafts.get(key) || '')}</textarea><span class="helper" id="decision-help">例如：只采纳其中一部分并说明范围，或说明调整、拒绝、暂缓。知悉不表示采纳，选择不自动执行。</span><span class="error" id="decision-error" role="alert"></span></div><p class="error" id="save-error" role="alert"></p></div><div class="dialog-footer">${button('close-dialog', '取消', 'type="button"')}<button class="primary" type="submit">保存回应</button></div></form>`);
@@ -516,6 +553,7 @@ document.addEventListener('click', (event) => {
   if (!canWrite()) return;
   if (action === 'create' || action === 'related') { createDialog(action === 'related'); return; }
   if (action === 'edit') { editDialog(); return; }
+  if (action === 'research-control') { lifecycleDialog(); return; }
   if (action.startsWith('decision-')) {
     const entry = decisionFromControl(control); if (!entry) return;
     if (action === 'decision-reply') { decisionDialog(entry); return; }
@@ -528,7 +566,7 @@ document.addEventListener('click', (event) => {
   if (['pause', 'resume', 'end'].includes(action)) command(action);
 });
 document.addEventListener('submit', (event) => {
-  if (!['create-form', 'edit-form', 'conversation-form', 'decision-reply-form'].includes(event.target.id)) return;
+  if (!['create-form', 'edit-form', 'conversation-form', 'decision-reply-form', 'lifecycle-form', 'preferences-form'].includes(event.target.id)) return;
   event.preventDefault(); if (!canWrite()) return;
   const form = event.target; const data = new FormData(form);
   if (form.id === 'decision-reply-form') {
@@ -541,6 +579,32 @@ document.addEventListener('submit', (event) => {
     const text = String(data.get('text') || '').trim();
     if (!text) { $('#message-error').textContent = '请先填写补充内容。'; $('#message-input').setAttribute('aria-invalid', 'true'); $('#message-input').focus(); return; }
     command('message', { text }, Number(form.dataset.version)); return;
+  }
+  if (form.id === 'lifecycle-form') {
+    const action = String(data.get('action'));
+    const mode = String(data.get('mode'));
+    const scopeValue = String(data.get('scope') || '').trim();
+    const reason = String(data.get('reason') || '').trim();
+    if (!reason) { $('#lifecycle-reason').setAttribute('aria-invalid', 'true'); $('#lifecycle-reason').focus(); return; }
+    if ((action === 'pause' && mode === 'direction') || action === 'resume') {
+      if (!scopeValue && action === 'pause') { $('#lifecycle-scope').setAttribute('aria-invalid', 'true'); $('#lifecycle-scope').focus(); return; }
+    }
+    if (action === 'schedule_resume' || action === 'schedule_end') {
+      const at = String(data.get('at') || '');
+      if (!at) { $('#lifecycle-at').setAttribute('aria-invalid', 'true'); $('#lifecycle-at').focus(); return; }
+      void mutate(`/api/delegations/${encodeURIComponent(current().id)}/commands`, { kind: 'research_control', expectedVersion: Number(form.dataset.revision), action, at: new Date(at).toISOString(), reason, idempotencyKey: crypto.randomUUID() }, 'research-control');
+      return;
+    }
+    void mutate(`/api/delegations/${encodeURIComponent(current().id)}/commands`, { kind: 'research_control', expectedVersion: Number(form.dataset.revision), action, mode, scope: scopeValue || undefined, reason, idempotencyKey: crypto.randomUUID() }, 'research-control');
+    return;
+  }
+  if (form.id === 'preferences-form') {
+    const time = String(data.get('time') || '');
+    const timeZone = String(data.get('timeZone') || '').trim();
+    const weekdays = data.getAll('weekdays').map(Number).filter(day => day >= 1 && day <= 7);
+    if (!time || !timeZone || !weekdays.length) { state.error = '请完整填写简报时间、时区和至少一个星期。'; render(); announce(state.error); return; }
+    void mutate(`/api/delegations/${encodeURIComponent(current().id)}/commands`, { kind: 'notification_preferences', expectedRevision: Number(form.dataset.revision), time: `${time}:00`, timeZone, weekdays, idempotencyKey: crypto.randomUUID() }, 'notification-preferences');
+    return;
   }
   const goal = String(data.get('goal') || '').trim();
   if (!goal) { const input = form.querySelector('[name="goal"]'); const error = form.querySelector('.error'); error.textContent = '请写下一段非空的持续目标。'; input.setAttribute('aria-invalid', 'true'); input.focus(); return; }

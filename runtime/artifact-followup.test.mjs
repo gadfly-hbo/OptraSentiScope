@@ -76,7 +76,7 @@ test('a source event preserves the old observation cause and continues through a
   assert.equal(await first.options.beforeStep(first.binding,{turn:4,step:1,scheduledOnly:true}),false);
   writeFileSync(file,'SYNTHETIC_SECOND_SOURCE');await f.c.sync(f.d.id);const fresh=f.main();assert.ok(fresh.binding.epoch>first.binding.epoch);
   const prior=f.c.detail(f.d.id).followups.find(x=>x.id===observation.id);assert.equal(prior.dueCause.kind,'source_event');assert.equal(prior.status,'superseded');
-  await assert.rejects(f.invoke(fresh,'read_artifact',{artifactId:v1.artifactId,version:1}),{code:'artifact_historical'});
+  const exactOld=await f.invoke(fresh,'read_artifact',{artifactId:v1.artifactId,version:1});assert.equal(exactOld.content.summary,'SYNTHETIC_OLD_ARTIFACT_BODY');assert.equal(exactOld.epoch,first.binding.epoch);assert.notEqual(exactOld.epoch,fresh.binding.epoch);
   const metadata=await f.invoke(fresh,'list_artifacts',{});assert.equal(JSON.stringify(metadata).includes('SYNTHETIC_OLD_ARTIFACT_BODY'),false);
   const current=(await f.invoke(fresh,'list_sources',{})).references.filter(r=>r.hash!==evidence[0].hash).map(({ref,hash})=>({ref,hash}));
   const v2=await f.invoke(fresh,'publish_artifact',{requestId:'second',artifactId:v1.artifactId,expectedVersion:1,reason:'当前新资料上的关联修订；不重放旧epoch正文',content:{...judgment,summary:'SYNTHETIC_NEW_ARTIFACT_BODY',evidence:current}});

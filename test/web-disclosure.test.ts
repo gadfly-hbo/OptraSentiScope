@@ -104,6 +104,15 @@ test('results show evidence-driven cognition corrections and pending plan re-eva
   await ui.tick();const protectedHtml=ui.screen.innerHTML;assert.equal(protectedHtml.includes('WITHDRAWN_COGNITION_'),false);assert.equal(protectedHtml.includes('WITHDRAWN_SUPPORT_'),false);assert.ok(protectedHtml.includes('资格已变化的认识记录（2）'));
 });
 
+test('results show conditional reusable experiences and actual use without replaying withdrawn bodies',async()=>{
+  const experiences:any=[{id:'experience-one',version:2,title:'条件化会员经验',status:'limited',qualification:'current',summary:'仅在复购会员子集适用',sourceDelegationId:'delegation-one',createdAt:'2026-11-18T01:00:00.000Z',validUntil:'2099-01-01T00:00:00.000Z',businessConditions:['复购会员子集'],limitations:['不证明因果'],counterexamples:[{ref:'synthetic-counterexample',hash:'a'.repeat(64)}],unknowns:['长期稳定性未知'],revalidateWhen:{condition:'新反证到达时'}},{id:'experience-two',version:1,title:'资格变化经验',status:'active',qualification:'unavailable',sourceDelegationId:'delegation-one',createdAt:'2026-11-18T01:00:00.000Z',validUntil:'2099-01-01T00:00:00.000Z'}];
+  const uses:any=[{id:'use-one',experience:{id:'experience-one',version:2},decision:'applied',reason:'目标范围与条件一致',influence:'优先核对会员复购机制',artifact:{artifactId:'artifact-one',version:1},createdAt:'2026-11-18T01:10:00.000Z'},{id:'use-two',experience:{id:'experience-one',version:2},decision:'not_applied',reason:'新客范围不匹配',influence:'避免泛化复用',createdAt:'2026-11-18T01:11:00.000Z'}];
+  const ui=await workspace({experiences:{experiences,uses}});await ui.navigate('delegation-one','results');const html=ui.screen.innerHTML;
+  assert.ok(html.includes('可复用经验'));assert.ok(html.includes('仅在复购会员子集适用'));assert.ok(html.includes('复购会员子集'));assert.ok(html.includes('优先核对会员复购机制'));assert.ok(html.includes('避免泛化复用'));assert.ok(html.includes('经验使用不是独立证据'));assert.equal(html.includes('UNAVAILABLE_EXPERIENCE'),false);assert.equal(html.includes('<form'),false);
+  experiences[0]={...experiences[0],qualification:'unavailable',summary:'WITHDRAWN_EXPERIENCE_BODY',businessConditions:['WITHDRAWN_EXPERIENCE_CONDITION']};uses[0]={...uses[0],qualification:'unavailable'};
+  await ui.tick();const protectedHtml=ui.screen.innerHTML;assert.equal(protectedHtml.includes('WITHDRAWN_EXPERIENCE_'),false);assert.equal(protectedHtml.includes('仅在复购会员子集适用'),false);assert.equal(protectedHtml.includes('优先核对会员复购机制'),false);assert.ok(protectedHtml.includes('过期或资格变化的经验（2）'));assert.ok(protectedHtml.includes('当前没有可回放正文的适用经验'));
+});
+
 test('an observation stays linked to its exact older execution revision while disclosed history survives refresh and version updates',async()=>{
  const feed={choices:[outcomeChoice],executions:[{...executionFixture,latest:false},{...executionFixture,revision:2,extent:'执行范围后来扩大，但旧观察不转移',latest:true}],observations:[observationFixture]};const ui=await workspace({outcomeFeed:feed});await ui.navigate('delegation-one','results');
  assert.ok(ui.screen.innerHTML.includes('对应执行 execution-one @ r1'));assert.ok(ui.screen.innerHTML.includes('执行范围后来扩大，但旧观察不转移'));

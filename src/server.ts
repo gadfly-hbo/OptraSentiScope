@@ -19,6 +19,11 @@ export interface LocalHostOptions {
     detail(id: string): Record<string, unknown>;
     changed(id: string): void;
     respondDecision?(id: string, input: OperatorResponseInput): Promise<unknown>;
+    pauseResearch?(id: string, input: {expectedVersion:number;mode:'all'|'direction';scope?:string;reason:string;idempotencyKey:string}): unknown;
+    resumeResearch?(id: string, input: {expectedVersion:number;scope?:string;reason:string;idempotencyKey:string}): unknown;
+    scheduleResume?(id: string, input: {expectedRevision:number;at:string;reason:string;idempotencyKey:string}): Promise<unknown>;
+    scheduleEnd?(id: string, input: {expectedRevision:number;at:string;reason:string;idempotencyKey:string}): Promise<unknown>;
+    configureNotificationPreferences?(id: string, input: {timeZone:string;time:string;weekdays:number[]}, expectedRevision:number): unknown;
   };
 }
 
@@ -111,6 +116,25 @@ export async function startLocalHost(options: LocalHostOptions) {
           const updated = options.store.appendMessage(owner, id, { ...shared, text: body.text as string });
           notifyChanged(id);
           return json(response, 200, detail(updated));
+        }
+        if (body.kind === 'research_control') {
+          onlyFields(body, ['kind', 'expectedVersion', 'action', 'mode', 'scope', 'reason', 'at', 'idempotencyKey']);
+          const action = body.action as 'pause'|'resume'|'schedule_resume'|'schedule_end';
+          const shared = { expectedVersion: Number(body.expectedVersion), reason: String(body.reason ?? ''), idempotencyKey: String(body.idempotencyKey) };
+          if (action === 'pause' && options.researchPort?.pauseResearch) options.researchPort.pauseResearch(id, { ...shared, mode: body.mode as 'all'|'direction', scope: body.scope as string | undefined });
+          else if (action === 'resume' && options.researchPort?.resumeResearch) options.researchPort.resumeResearch(id, { ...shared, scope: body.scope as string | undefined });
+          else if (action === 'schedule_resume' && options.researchPort?.scheduleResume) await options.researchPort.scheduleResume(id, { expectedRevision: shared.expectedVersion, at: String(body.at), reason: shared.reason, idempotencyKey: shared.idempotencyKey });
+          else if (action === 'schedule_end' && options.researchPort?.scheduleEnd) await options.researchPort.scheduleEnd(id, { expectedRevision: shared.expectedVersion, at: String(body.at), reason: shared.reason, idempotencyKey: shared.idempotencyKey });
+          else throw new StoreError('research_control_unavailable', '细粒度生命周期控制尚未就绪。', 503);
+          notifyChanged(id);
+          return json(response, 200, detail(options.store.get(owner, id)));
+        }
+        if (body.kind === 'notification_preferences') {
+          onlyFields(body, ['kind', 'expectedRevision', 'timeZone', 'time', 'weekdays', 'idempotencyKey']);
+          if(!options.researchPort?.configureNotificationPreferences)throw new StoreError('notification_preferences_unavailable', '简报偏好配置尚未就绪。', 503);
+          options.researchPort.configureNotificationPreferences(id, { timeZone: String(body.timeZone), time: String(body.time), weekdays: body.weekdays as number[] }, Number(body.expectedRevision));
+          notifyChanged(id);
+          return json(response, 200, detail(options.store.get(owner, id)));
         }
         if (body.kind === 'pause' || body.kind === 'resume' || body.kind === 'end') {
           onlyFields(body, ['kind', 'expectedVersion', 'idempotencyKey']);

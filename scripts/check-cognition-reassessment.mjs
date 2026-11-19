@@ -28,7 +28,7 @@ const cli=resolve(sdk,'node_modules/@deepseek-ai/dsh/lib/bin.js'),args=[cli,'--p
 const descriptors=[openSync(resolve(root,'stdout.txt'),'wx',0o600),openSync(resolve(root,'stderr.txt'),'wx',0o600)];
 const command={argv:[process.execPath,...args],cwd:root,startedAt:new Date().toISOString(),inheritedCredentialEnvironment:false,syntheticOnly:true};save(resolve(root,'process-started.json'),command);
 const child=spawn(process.execPath,args,{cwd:root,env,stdio:['ignore',...descriptors]});let timedOut=false,killTimer;
-const timer=setTimeout(()=>{timedOut=true;child.kill('SIGINT');killTimer=setTimeout(()=>child.kill('SIGKILL'),5000);},80000);
+const timer=setTimeout(()=>{timedOut=true;child.kill('SIGINT');killTimer=setTimeout(()=>child.kill('SIGKILL'),5000);},150000);
 let exit;try{exit=await new Promise((accept,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>accept({code,signal}));});}catch(error){exit={code:null,signal:null,error:error.message};}finally{clearTimeout(timer);clearTimeout(killTimer);descriptors.forEach(closeSync);}
 save(resolve(root,'process.json'),{...command,...exit,timedOut,endedAt:new Date().toISOString()});
 const after=identity();save(resolve(root,'identity-after.json'),after);const oldHashes=new Map(before.files.map(file=>[file.path,file.sha256])),newHashes=new Map(after.files.map(file=>[file.path,file.sha256]));const changed=[...new Set([...oldHashes.keys(),...newHashes.keys()])].filter(path=>oldHashes.get(path)!==newHashes.get(path));

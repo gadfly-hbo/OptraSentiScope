@@ -12,7 +12,8 @@ export type CognitionTrigger=
  |{kind:'source_event';eventId:string;sourceId:string;observedAt:string}
  |{kind:'execution';id:string;revision:number}
  |{kind:'observation';id:string;revision:number}
- |{kind:'followup';followupId:string};
+ |{kind:'followup';followupId:string}
+ |{kind:'experience';id:string;version:number};
 export interface SaveSupportRelation {
  id?:string;expectedRevision?:number;requestId:string;judgment:ArtifactReference;plan:ArtifactReference;
  scope:string;why:string;reason:string;status?:SupportStatus;
@@ -32,6 +33,7 @@ export interface CognitionReview extends SaveCognitionReview {
 export type CognitionReviewResult=CognitionReview&{reevaluations:readonly CognitionReevaluation[]};
 export interface CognitionReevaluation {
  id:string;reviewId:string;relation:{id:string;revision:number};judgment:ArtifactReference;plan:ArtifactReference;
+ relations?:readonly {id:string;revision:number}[];
  scope:string;why:string;binding:RunBinding;createdAt:string;updatedAt:string;
  status:'pending'|'completed'|'blocked'|'superseded'|'closed';
  result?:{requestId:string;conclusion:ReassessmentConclusion;reason:string;nextSteps:readonly string[];unknowns:readonly string[];outcomePlan?:ArtifactReference;at:string};
@@ -43,6 +45,7 @@ export interface SaveReevaluationResult {
 export interface CognitionOptions {
  isCurrent(binding:RunBinding):boolean;currentEpoch():number;
  isLatestPlan(ref:ArtifactReference,goalRevision:number):boolean;
+ artifactKind(ref:ArtifactReference):'judgment'|'plan'|undefined;
  verifyArtifact(binding:RunBinding,ref:ArtifactReference):Promise<ArtifactReassessment>;
  verifyTrigger(binding:RunBinding,trigger:CognitionTrigger):Promise<void>;
  revalidateTrigger(binding:RunBinding,trigger:CognitionTrigger):boolean;
@@ -62,10 +65,11 @@ function instant(value:unknown):string{
  if(month<1||month>12||day<1||day>days[month-1]||+m[4]>23||+m[5]>59||+m[6]>59||!Number.isFinite(Date.parse(source)))return invalid();return new Date(source).toISOString();
 }
 function triggerOf(value:unknown):CognitionTrigger{
- const raw=object(value,['kind','eventId','sourceId','observedAt','id','revision','followupId']);
+ const raw=object(value,['kind','eventId','sourceId','observedAt','id','revision','followupId','version']);
  if(raw.kind==='source_event')return{kind:'source_event',eventId:text(raw.eventId,500),sourceId:text(raw.sourceId,500),observedAt:instant(raw.observedAt)};
  if(raw.kind==='execution'||raw.kind==='observation')return{kind:raw.kind,id:text(raw.id,500),revision:integer(raw.revision,1)};
  if(raw.kind==='followup')return{kind:'followup',followupId:text(raw.followupId,500)};
+ if(raw.kind==='experience')return{kind:'experience',id:text(raw.id,500),version:integer(raw.version,1)};
  return invalid();
 }
 function supportInput(value:unknown):SaveSupportRelation{
@@ -102,28 +106,58 @@ export class CognitionStore {
   return{owner:{...this.#scope.owner},delegationId:value.delegationId,goalRevision:value.goalRevision,epoch:value.epoch,generation:value.generation,role:'main'};
  }
  #current(binding:RunBinding){const d=this.#store.scope(this.#scope.owner,this.#scope.delegationId);if(d.lifecycle!=='active'||d.goalRevision!==binding.goalRevision||this.#options.isCurrent(binding)!==true)throw new StoreError('cognition_stale','认识修正的当前运行资格已变化。',409);}
- #request(kind:'support'|'review'|'reevaluation',requestId:string,hash:string):{recordId:string;revision:number}|undefined{const row=this.#store.connection.prepare('SELECT request_hash,record_id,revision FROM cognition_requests WHERE namespace=? AND request_id=?').get(this.#namespace,requestId) as {request_hash:string;record_id:string;revision:number}|undefined;if(!row)return undefined;if(row.request_hash!==hash)throw new StoreError('cognition_conflict','同一认识修正请求不能改写内容。',409);return{recordId:row.record_id,revision:row.revision};}
- #writeSupport(value:SupportRelation){this.#store.connection.prepare('INSERT INTO cognition_supports VALUES (?,?,?,?)').run(this.#namespace,value.id,value.revision,JSON.stringify(value));this.#store.connection.prepare('INSERT INTO cognition_requests VALUES (?,?,?,?,?,?)').run(this.#namespace,value.requestId,digest({kind:'support',goalRevision:value.goalRevision,epoch:value.epoch,value}),'support',value.id,value.revision);}
+ #request(kind:'review'|'reevaluation',requestId:string,hash:string):{recordId:string;revision:number}|undefined{const row=this.#store.connection.prepare('SELECT request_hash,record_id,revision FROM cognition_requests WHERE namespace=? AND request_id=?').get(this.#namespace,requestId) as {request_hash:string;record_id:string;revision:number}|undefined;if(!row)return undefined;if(row.request_hash!==hash)throw new StoreError('cognition_conflict','同一认识修正请求不能改写内容。',409);return{recordId:row.record_id,revision:row.revision};}
+ #supportInputOf(record:SupportRelation):SaveSupportRelation{return{expectedRevision:record.revision-1,requestId:record.requestId,judgment:record.judgment,plan:record.plan,scope:record.scope,why:record.why,reason:record.reason,status:record.status};}
+ #supportHash(binding:RunBinding,value:SaveSupportRelation){return digest({kind:'support',goalRevision:binding.goalRevision,epoch:binding.epoch,value});}
+ #supportRequest(binding:RunBinding,requestId:string,hash:string):SupportRelation|undefined{
+  const row=this.#store.connection.prepare('SELECT request_hash,record_id,revision FROM cognition_requests WHERE namespace=? AND request_id=?').get(this.#namespace,requestId) as{request_hash:string;record_id:string;revision:number}|undefined;if(!row)return undefined;
+  const record=JSON.parse(this.#store.connection.prepare('SELECT value FROM cognition_supports WHERE namespace=? AND id=? AND revision=?').get(this.#namespace,row.record_id,row.revision)!.value as string) as SupportRelation;
+  const canonical=this.#supportHash(binding,this.#supportInputOf(record));const legacy=digest({kind:'support',goalRevision:record.goalRevision,epoch:record.epoch,value:record});
+  if(row.request_hash!==canonical&&row.request_hash!==legacy)throw new StoreError('cognition_conflict','同一认识修正请求不能改写内容。',409);
+  if(hash!==canonical&&hash!==row.request_hash)throw new StoreError('cognition_conflict','同一认识修正请求不能改写内容。',409);return record;
+ }
+ #writeSupport(value:SupportRelation,hash:string){this.#store.connection.prepare('INSERT INTO cognition_supports VALUES (?,?,?,?)').run(this.#namespace,value.id,value.revision,JSON.stringify(value));this.#store.connection.prepare('INSERT INTO cognition_requests VALUES (?,?,?,?,?,?)').run(this.#namespace,value.requestId,hash,'support',value.id,value.revision);}
  supports():SupportRelation[]{this.#store.scope(this.#scope.owner,this.#scope.delegationId);return this.#store.connection.prepare('SELECT value FROM cognition_supports WHERE namespace=? ORDER BY rowid').all(this.#namespace).map(r=>JSON.parse(r.value as string));}
  latestSupports():SupportRelation[]{return [...new Map(this.supports().map(r=>[r.id,r])).values()];}
  reviews():CognitionReview[]{this.#store.scope(this.#scope.owner,this.#scope.delegationId);return this.#store.connection.prepare('SELECT value FROM cognition_reviews WHERE namespace=? ORDER BY rowid').all(this.#namespace).map(r=>JSON.parse(r.value as string));}
  reevaluations():CognitionReevaluation[]{this.#store.scope(this.#scope.owner,this.#scope.delegationId);return this.#store.connection.prepare('SELECT value FROM cognition_reevaluations WHERE namespace=? ORDER BY rowid').all(this.#namespace).map(r=>JSON.parse(r.value as string));}
  #requiredReevaluation(id:string):CognitionReevaluation{const row=this.#store.connection.prepare('SELECT value FROM cognition_reevaluations WHERE namespace=? AND id=?').get(this.#namespace,text(id,500));if(!row)throw new StoreError('cognition_not_found','未找到准确建议重评责任。',404);return JSON.parse(row.value as string);}
  #writeReevaluation(value:CognitionReevaluation){this.#store.connection.prepare('INSERT INTO cognition_reevaluations VALUES (?,?,?) ON CONFLICT(namespace,id) DO UPDATE SET value=excluded.value').run(this.#namespace,value.id,JSON.stringify(value));}
+ #reachablePlans(binding:RunBinding,root:ArtifactReference){
+  const relations=this.latestSupports().filter(relation=>relation.status==='active'&&relation.goalRevision===binding.goalRevision);
+  const bySource=new Map<string,SupportRelation[]>();for(const relation of relations){const list=bySource.get(relation.judgment.artifactId)??[];list.push(relation);bySource.set(relation.judgment.artifactId,list);}
+  const terminal=new Map<string,{relation:SupportRelation;relations:SupportRelation[];scope:string;why:string;judgment:ArtifactReference}>();
+  const visit=(source:ArtifactReference,path:SupportRelation[],seenSources:Set<string>,seenRelations:Set<string>)=>{
+   if(seenSources.has(source.artifactId)||path.length>50)return;seenSources.add(source.artifactId);
+   for(const relation of bySource.get(source.artifactId)??[]){
+    if(seenRelations.has(`${relation.id}:${relation.revision}`)||!this.#options.isLatestPlan(relation.plan,binding.goalRevision))continue;
+    const nextPath=[...path,relation],scope=path.length?`${path.map(item=>item.scope).join('；')}；${relation.scope}`:relation.scope,why=path.length?`${path.map(item=>item.why).join('；')}；${relation.why}`:relation.why;
+    if(this.#options.artifactKind(relation.plan)==='plan'){const key=JSON.stringify(relation.plan);if(!terminal.has(key))terminal.set(key,{relation,relations:nextPath,scope,why,judgment:root});continue;}
+    if(this.#options.artifactKind(relation.plan)==='judgment')visit(relation.plan,nextPath,new Set(seenSources),new Set([...seenRelations,`${relation.id}:${relation.revision}`]));
+   }
+  };
+  visit(root,[],new Set(),new Set());return[...terminal.values()];
+ }
+ #supportForAdjustedPlan(binding:RunBinding,previous:SupportRelation,plan:ArtifactReference,reason:string,requestId:string):SupportRelation{
+  const input:SaveSupportRelation={requestId:requestId.slice(0,500),judgment:previous.judgment,plan,scope:previous.scope,why:previous.why,reason,status:'active'};const hash=this.#supportHash(binding,input);
+  const replay=this.#supportRequest(binding,input.requestId,hash);if(replay)return replay;
+  const record:SupportRelation={...input,id:previous.id,revision:previous.revision+1,createdAt:this.#now(),goalRevision:binding.goalRevision,epoch:binding.epoch,binding,supersedes:{id:previous.id,revision:previous.revision}};
+  this.#writeSupport(record,hash);return record;
+ }
  async saveSupport(inputBinding:RunBinding,input:SaveSupportRelation):Promise<SupportRelation>{
-  const binding=this.#binding(inputBinding),value=supportInput(input),hash=digest({kind:'support',goalRevision:binding.goalRevision,epoch:binding.epoch,value});
-  const prior=this.#request('support',value.requestId,hash);if(prior){const row=this.#store.connection.prepare('SELECT value FROM cognition_supports WHERE namespace=? AND id=? AND revision=?').get(this.#namespace,prior.recordId,prior.revision);return JSON.parse(row!.value as string);}
+  const binding=this.#binding(inputBinding),value=supportInput(input),hash=this.#supportHash(binding,value);
+  const prior=this.#supportRequest(binding,value.requestId,hash);if(prior)return structuredClone(prior);
   const judgment=await this.#options.verifyArtifact(binding,value.judgment),plan=await this.#options.verifyArtifact(binding,value.plan);
-  if(judgment.status!=='qualified'||plan.status!=='qualified'||judgment.revision.kind!=='judgment'||plan.revision.kind!=='plan')throw new StoreError('cognition_artifact_unavailable','支持关系须准确读回判断与方案原件。',409);
-  if(!this.#options.isLatestPlan(value.plan,binding.goalRevision))throw new StoreError('cognition_target_stale','依赖建议必须是当前目标的最新准确版本。',409);
+  if(judgment.status!=='qualified'||plan.status!=='qualified'||judgment.revision.kind!=='judgment'||!['judgment','plan'].includes(plan.revision.kind))throw new StoreError('cognition_artifact_unavailable','支持关系须准确读回判断及判断/方案原件。',409);
+  if(this.#options.artifactKind(value.plan)!==plan.revision.kind||!this.#options.isLatestPlan(value.plan,binding.goalRevision))throw new StoreError('cognition_target_stale','依赖对象必须是当前目标的最新准确版本。',409);
   return this.#store.withTransaction(()=>{
-   this.#current(binding);const replay=this.#request('support',value.requestId,hash);if(replay)return JSON.parse(this.#store.connection.prepare('SELECT value FROM cognition_supports WHERE namespace=? AND id=? AND revision=?').get(this.#namespace,replay.recordId,replay.revision)!.value as string);
-   if(!this.#options.isLatestPlan(value.plan,binding.goalRevision))throw new StoreError('cognition_target_stale','依赖建议必须是当前目标的最新准确版本。',409);
+   this.#current(binding);const replay=this.#supportRequest(binding,value.requestId,hash);if(replay)return structuredClone(replay);
+   if(this.#options.artifactKind(value.plan)!==plan.revision.kind||!this.#options.isLatestPlan(value.plan,binding.goalRevision))throw new StoreError('cognition_target_stale','依赖对象必须是当前目标的最新准确版本。',409);
    const previous=value.id?this.latestSupports().find(r=>r.id===value.id):undefined;
    if(value.expectedRevision!==(previous?.revision??0)||(value.id&&!previous)||(!value.id&&value.expectedRevision!==0))throw new StoreError('cognition_conflict','支持关系版本已变化，请读取当前版本后修订。',409);
    if(previous&&(digest(previous.judgment)!==digest(value.judgment)||digest(previous.plan)!==digest(value.plan)))throw new StoreError('cognition_association_changed','同一支持关系不能改挂其他判断或建议。',409);
    const id=value.id??randomUUID(),now=this.#now(),record:SupportRelation={...value,id,revision:(previous?.revision??0)+1,createdAt:now,goalRevision:binding.goalRevision,epoch:binding.epoch,binding,supersedes:previous?{id,revision:previous.revision}:null};
-   this.#writeSupport(record);return structuredClone(record);
+   this.#writeSupport(record,hash);return structuredClone(record);
   });
  }
  async review(inputBinding:RunBinding,input:SaveCognitionReview):Promise<CognitionReviewResult>{
@@ -142,8 +176,8 @@ export class CognitionStore {
    if(!this.#options.revalidateTrigger(binding,value.trigger))throw new StoreError('cognition_trigger_stale','触发事实在提交前已变化，不能保存该认识检查。',409);
    const duplicate=this.reviews().find(r=>digest({trigger:r.trigger,judgment:r.judgment,goalRevision:r.goalRevision,epoch:r.epoch})===digest({trigger:value.trigger,judgment:value.judgment,goalRevision:binding.goalRevision,epoch:binding.epoch}));
    if(duplicate)return{...duplicate,reevaluations:this.reevaluations().filter(r=>r.reviewId===duplicate.id)};
-   const id=randomUUID(),now=this.#now();const relations=value.conclusion==='maintained'||value.conclusion==='unknown'?[]:this.latestSupports().filter(r=>r.status==='active'&&r.goalRevision===binding.goalRevision&&digest(r.judgment)===digest(value.judgment)&&this.#options.isLatestPlan(r.plan,binding.goalRevision));
-   const tasks=relations.map(relation=>({id:digest([id,relation.id]),reviewId:id,relation:{id:relation.id,revision:relation.revision},judgment:relation.judgment,plan:relation.plan,scope:relation.scope,why:relation.why,binding,createdAt:now,updatedAt:now,status:'pending' as const}));
+   const id=randomUUID(),now=this.#now();const reachable=value.conclusion==='maintained'||value.conclusion==='unknown'?[]:this.#reachablePlans(binding,value.judgment);
+   const tasks=reachable.map(({relation,relations,scope,why,judgment})=>({id:digest([id,relation.id]),reviewId:id,relation:{id:relation.id,revision:relation.revision},...(relations.length>1?{relations:relations.map(item=>({id:item.id,revision:item.revision}))}:{}),judgment,plan:relation.plan,scope,why,binding,createdAt:now,updatedAt:now,status:'pending' as const}));
    const record:CognitionReview={...value,id,createdAt:now,goalRevision:binding.goalRevision,epoch:binding.epoch,binding,reevaluationIds:tasks.map(t=>t.id)};
    this.#store.connection.prepare('INSERT INTO cognition_reviews VALUES (?,?,?)').run(this.#namespace,id,JSON.stringify(record));
    this.#store.connection.prepare('INSERT INTO cognition_requests VALUES (?,?,?,?,?,?)').run(this.#namespace,value.requestId,hash,'review',id,1);
@@ -164,10 +198,12 @@ export class CognitionStore {
    this.#current(binding);const replay=this.#request('reevaluation',value.requestId,hash);if(replay)return this.#requiredReevaluation(value.id);
    const task=this.#requiredReevaluation(value.id);if(task.status==='completed')throw new StoreError('cognition_closed','该建议重评已收束，历史不能改写。',409);
    if(value.expectedRelationRevision!==task.relation.revision)throw new StoreError('cognition_conflict','支持关系修订已变化，请读取当前准确重评责任。',409);
-   const relation=this.latestSupports().find(r=>r.id===task.relation.id);
-   if(!relation||relation.revision!==task.relation.revision||relation.status!=='active'){task.status='superseded';task.updatedAt=this.#now();this.#writeReevaluation(task);conflict='cognition_relation_changed';return structuredClone(task);}
-   if(task.binding.goalRevision!==binding.goalRevision||task.binding.epoch!==binding.epoch||!this.#options.isLatestPlan(task.plan,binding.goalRevision)||value.outcomePlan&&!this.#options.isLatestPlan(value.outcomePlan,binding.goalRevision)){task.status='superseded';task.updatedAt=this.#now();this.#writeReevaluation(task);conflict='cognition_target_changed';return structuredClone(task);}
+   const pathRelations=(task.relations??[task.relation]).map(ref=>({ref,relation:this.latestSupports().find(r=>r.id===ref.id)}));
+   if(pathRelations.some(item=>!item.relation||item.relation.revision!==item.ref.revision||item.relation.status!=='active')){task.status='superseded';task.updatedAt=this.#now();this.#writeReevaluation(task);conflict='cognition_relation_changed';return structuredClone(task);}
+   const legalAdjustment=Boolean(value.outcomePlan&&value.outcomePlan.artifactId===task.plan.artifactId&&value.outcomePlan.version>task.plan.version&&this.#options.isLatestPlan(value.outcomePlan,binding.goalRevision));
+   if(task.binding.goalRevision!==binding.goalRevision||task.binding.epoch!==binding.epoch||(!legalAdjustment&&!this.#options.isLatestPlan(task.plan,binding.goalRevision))||(value.outcomePlan&&!legalAdjustment)){task.status='superseded';task.updatedAt=this.#now();this.#writeReevaluation(task);conflict='cognition_target_changed';return structuredClone(task);}
    if(task.status!=='pending')return structuredClone(task);
+   if(legalAdjustment)for(const item of pathRelations){const relation=item.relation!;if(digest(relation.plan)===digest(task.plan))this.#supportForAdjustedPlan(binding,relation,value.outcomePlan!,value.reason,`support-adjust:${value.requestId}:${relation.id}`);}
    task.status=value.conclusion==='unknown'?'blocked':'completed';task.updatedAt=this.#now();task.result={requestId:value.requestId,conclusion:value.conclusion,reason:value.reason,nextSteps:value.nextSteps,unknowns:value.unknowns,...(value.outcomePlan?{outcomePlan:value.outcomePlan}:{}),at:this.#now()};this.#writeReevaluation(task);
    this.#store.connection.prepare('INSERT INTO cognition_requests VALUES (?,?,?,?,?,?)').run(this.#namespace,value.requestId,hash,'reevaluation',task.id,1);return structuredClone(task);
   });

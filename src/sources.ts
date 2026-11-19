@@ -106,8 +106,11 @@ export class SourceStore {
   }
   listReferences(): SourceRecord[] {
     this.#scope();
-    return (this.#store.connection.prepare(`SELECT d.metadata FROM source_documents d JOIN source_cursors c ON c.namespace=d.namespace AND c.ref=d.ref
-      WHERE d.namespace=? AND c.state='present' ORDER BY c.source_id,c.path`).all(this.#ns) as { metadata: string }[]).map((row) => JSON.parse(row.metadata) as SourceRecord);
+    return (this.#store.connection.prepare(`SELECT d.metadata FROM source_documents d
+      JOIN source_cursors c ON c.namespace=d.namespace AND c.ref=d.ref
+      JOIN source_grants g ON g.namespace=d.namespace AND g.source_id=c.source_id
+      WHERE d.namespace=? AND c.state='present' AND (g.status='ready' OR g.status='unavailable') AND json_extract(g.config,'$.enabled')=1
+      ORDER BY c.source_id,c.path`).all(this.#ns) as { metadata: string }[]).map((row) => JSON.parse(row.metadata) as SourceRecord);
   }
   async #root(grant: NormalGrant): Promise<string> {
     const root = await realpath(grant.directory);
