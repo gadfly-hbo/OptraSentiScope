@@ -6,8 +6,8 @@
 
 | 阶段 | 状态 | 结果 |
 | --- | --- | --- |
-| P01 认识修正接收差异 | PASS（本地工程范围，待复核重验） | 主 Agent 可经 `read_artifact` 准确读回跨来源 epoch 的普通 judgment/plan 原件；依赖只沿显式 J→J/J→P 业务支持边展开，并保留同一 plan 的多条简单路径及路径关系；同一建议事项 P1→P2 以准确关系修订、CAS 和新 plan 版本收束；请求重放返回原回执；自然到期、重开、撤权遮蔽与结束后迟到不复活均已由目标测试和官方 SDK 合成链覆盖。 |
-| P02 条件经验闭环 | PASS（本地工程范围，待复核重验） | 新增不可变经验版本、来源/依据/条件/时效/限制/反例/复验条件、跨同企业委托发现与读取、实际调用/拒用留痕、来源撤权遮蔽；经验 v2 限缩后，合成 Agent 在正常工具路径记录 experience 触发的认识复核，并只沿显式依赖生成受影响建议重评。本证据不证明脱离 Agent 的 Host 自动调度触发。经验使用记录不是独立证据，不能自激。 |
+| P01 认识修正接收差异 | PASS（本地工程范围，Standards R3重验通过） | 主 Agent 可经 `read_artifact` 准确读回跨来源 epoch 的普通 judgment/plan 原件；依赖只沿显式 J→J/J→P 业务支持边展开，并保留同一 plan 的多条简单路径及路径关系；同一建议事项 P1→P2 以准确关系修订、CAS 和新 plan 版本收束；请求重放返回原回执。自然路径为组合证据：认知链由原生 recurring Schedule 自然到期扫描来源变化，后续 one-shot 以官方 public run 确定性解析；elapsed wall clock 另由 native Schedule 链覆盖。重开、撤权遮蔽与结束后迟到不复活均有目标测试和官方合成链证据。 |
+| P02 条件经验闭环 | PASS（本地工程范围，Standards R3重验通过） | 新增不可变经验版本、来源/依据/条件/时效/限制/反例/复验条件、跨同企业委托发现与读取、实际调用/拒用留痕、来源撤权遮蔽；经验 v2 限缩后，合成 Agent 在正常工具路径记录 experience 触发的认识复核，并只沿显式依赖生成受影响建议重评。本证据不证明脱离 Agent 的 Host 自动调度触发。经验使用记录不是独立证据，不能自激。 |
 | P03 委托入口与自动来源 | PARTIAL | 已完成一句话委托的结构化 intake、可修订一页摘要、集中关键澄清、`blockingScopes` 局部等待、进展页摘要面板、reusable experience 准确版本校验和经验失权后摘要正文遮蔽。有限来源自动发现/查取/订阅、游标与失联恢复、共享采集和来源缺口盘点仍未完成。 |
 | P04 生命周期与经营者工作台 | PARTIAL | 已完成全部/方向级暂停、精确方向匹配、暂停时获准采集继续、方向独立恢复、原生 Schedule 约定恢复/结束、结束后不复活、控制回执跨修订与重开幂等、HTTP `research_control` 与 `notification_preferences`、研究控制对话框和简报偏好表单。共享来源、在途/子工作收束摘要、恢复/结束摘要及 U01–U12 全量路径仍未完成。 |
 | P05 常驻运行与保护 | PARTIAL | 已完成优雅关闭后的 SQLite `VACUUM INTO` 备份、原生 sessions/storage 精确复制、manifest SHA256、安全路径与实际文件闭集校验、清单外/篡改/路径逃逸拒绝恢复、逐清单文件恢复、恢复目标不可覆盖、恢复后重开读回；并修复 Host closing 队列不再写已关闭库。真实 Linux 主机、HTTPS、生产身份、管理面、运维责任、长流与真实隔离仍未验证。 |
@@ -31,7 +31,7 @@
 | --- | --- |
 | `npm test` | PASS：289/289 tests，覆盖新增 P1、经验请求作用域、intake 经验资格、生命周期精确作用域、备份闭集校验、服务器命令与 Web 投影回归。 |
 | `npm run check` | PASS：准备检查、29 个产品文件 public SDK roots 边界与 3 个绕过反例、typecheck、289 tests、native/research/recovery/host-controls/artifact-followup/artifact-cold/operator-decisions/notifications/outcomes/effect-assessments/cognition-reassessment/experiences 官方或隔离链。最新证据见下表。 |
-| `npm run check:general-ui` | PASS：`.local/general-ui-checks/run-Pfq3J9/result.json`。真实外部浏览器驱动本地合成 Host 投影，验证委托摘要、局部等待、研究控制、偏好持久化、390px 无横向滚动和浏览器错误为空；result 记录 Node、git HEAD、dirty 状态与 5 个关键产品文件 SHA256。该脚本依赖本机外部 `agent-browser`，CI Ubuntu 不安装该工具；因此沿用仓库既有浏览器检查单独执行模式，不纳入 CI 的 `npm run check`，不把 CI 结果表述为浏览器验证。 |
+| `npm run check:general-ui` | PASS：`.local/general-ui-checks/run-Bbux7T/result.json`。真实外部浏览器驱动本地合成 Host 投影，验证委托摘要、局部等待、研究控制、偏好持久化、390px 无横向滚动和浏览器错误为空；result 记录 Node、干净代码提交 `6cd286c99faf01ff324d7fc6c4d2efdc3b9ba964`、`sourceDirty:false` 与 5 个关键产品文件 SHA256。该脚本依赖本机外部 `agent-browser`，CI Ubuntu 不安装该工具；因此沿用仓库既有浏览器检查单独执行模式，不纳入 CI 的 `npm run check`，不把 CI 结果表述为浏览器验证。 |
 | `npm audit --audit-level=high` | PASS：`found 0 vulnerabilities`。未新增运行依赖。 |
 
 最新完整链关键证据：
@@ -55,9 +55,10 @@
 
 ## 独立复核、CI 与固定候选
 
-- 状态：复核修复已完成，待固定修复提交并请非作者重验。首轮独立报告：Spec R2 `PASS_WITH_FINDINGS`，见 `.local/independent/general-v01-completion-spec-r2/REPORT.md`；Standards R2 `FAIL`，见 `.local/independent/general-v01-completion-standards-r2/REPORT.md`。
-- 已处理：结果措辞改为 J→J/J→P 与 Agent 正常工具路径触发；浏览器证据补合成投影说明和产品文件 SHA256；三项阻塞代码缺陷与两项非阻塞缺陷均已修复并复验。
-- 待完成：将修复固定为新提交，由未参与创作的独立上下文重验受影响范围；随后对最终提交运行实际 GitHub CI。
+- 状态：复核修复与受影响重验已完成。首轮独立报告：Spec R2 `PASS_WITH_FINDINGS`，见 `.local/independent/general-v01-completion-spec-r2/REPORT.md`；Standards R2 `FAIL`，见 `.local/independent/general-v01-completion-standards-r2/REPORT.md`。
+- 修复重验：Standards R3 `PASS`，F01–F05全部 RESOLVED，见 `.local/independent/general-v01-completion-standards-r2/REVIEW-R3.md`；Spec R3 `PASS_WITH_FINDINGS`，F-01/F-02/F-03 RESOLVED，F-04由本节自然 Schedule 组合说明修正，见 `.local/independent/general-v01-completion-spec-r2/REVIEW-R3.md`。随后 Spec R4 因11-20盘点一句状态过期判 `FAIL`；作者修正后 Spec R5 `PASS`，见同目录 `REVIEW-R4.md` / `REVIEW-R5.md`。
+- 代码修复固定于 `6cd286c99faf01ff324d7fc6c4d2efdc3b9ba964`；本结果记录更新只涉及交付说明，不改变已重验产品字节。
+- 待完成：对包含本回执的最终 Git head 运行实际 GitHub CI，并记录平台结果；本地检查不表述为 CI PASS。
 - CI 说明：workflow 仅 PR、main push 和手动 dispatch 触发；普通工作分支 push 不触发。最终提交需 PR 或手动 dispatch 后核对实际 head 的 Check 结果。本地 `npm run check` 不表述为 CI PASS。
 
 ## 仍未完成 / 阻塞
