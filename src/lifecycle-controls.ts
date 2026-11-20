@@ -1,6 +1,6 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {StoreError} from './domain.ts';
-import type {Owner} from './domain.ts';
+import type {Owner,PendingOperation} from './domain.ts';
 import type {SentiStore} from './store.ts';
 import type {RunBinding} from '../runtime/index.ts';
 
@@ -11,9 +11,10 @@ export interface PauseResearchInput {expectedRevision:number;mode:'all'|'directi
 export interface ResumeResearchInput {expectedRevision:number;scope?:string;reason:string;idempotencyKey:string;}
 export interface LifecycleSchedulePlan {
  id:string;delegationId:string;kind:'resume'|'end';at:string;reason:string;binding:RunBinding;createdAt:string;updatedAt:string;
- status:'pending'|'creating'|'active'|'completed'|'cancelled'|'unknown';
+ status:'pending'|'creating'|'active'|'ending'|'completed'|'cancelled'|'unknown';
  schedule:{status:'none'|'creating'|'active'|'stop_pending'|'stopped'|'unknown';sessionId?:string;id?:string;binding?:RunBinding};
  previousSchedules?:LifecycleSchedulePlan['schedule'][];
+ endOperation?:Pick<PendingOperation,'id'|'requestedVersion'>;
 }
 const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function invalid():never{throw new StoreError('lifecycle_control_invalid','细粒度生命周期控制字段无效。');}
@@ -52,8 +53,30 @@ export class LifecycleControlsStore {
  }
  prepareSchedule(id:string,sessionId:string):LifecycleSchedulePlan{return this.#store.withTransaction(()=>{const value=this.plan(id);if(!value)throw new StoreError('lifecycle_control_not_found','未找到生命周期约定。',404);if(value.status!=='pending'||value.schedule.status!=='none')throw new StoreError('lifecycle_control_state','生命周期调度不能重复创建。',409);value.status='creating';value.schedule={status:'creating',sessionId,binding:value.binding};this.#writePlan(value);return structuredClone(value);});}
  attachSchedule(id:string,sessionId:string,scheduleId:string):LifecycleSchedulePlan{return this.#store.withTransaction(()=>{const value=this.plan(id);if(!value||value.schedule.sessionId!==sessionId||value.schedule.id&&value.schedule.id!==scheduleId)throw new StoreError('lifecycle_control_conflict','原生生命周期调度回执不匹配。',409);if(value.schedule.id)return structuredClone(value);value.schedule.id=scheduleId;value.schedule.status='active';value.status='active';this.#writePlan(value);return structuredClone(value);});}
- duePlans():readonly LifecycleSchedulePlan[]{const now=this.#now();return this.plans().filter(item=>item.status==='active'&&item.at<=now);}
- completePlan(id:string):LifecycleSchedulePlan{return this.#store.withTransaction(()=>{const value=this.plan(id);if(!value||value.status!=='active')throw new StoreError('lifecycle_control_state','生命周期约定未到期或已收束。',409);value.status='completed';if(value.schedule.status==='active')value.schedule.status='stop_pending';this.#writePlan(value);return structuredClone(value);});}
+ #isDue(value:LifecycleSchedulePlan,now:string):boolean {
+  // Older builds marked an end completed before committing the delegation end.
+  const uncommittedEnd=value.kind==='end'&&value.status==='completed'&&value.schedule.status==='stop_pending';
+  return value.at<=now&&(value.status==='active'||uncommittedEnd);
+ }
+ duePlans():readonly LifecycleSchedulePlan[]{const now=this.#now();return this.plans().filter(value=>this.#isDue(value,now));}
+ beginEnd(id:string,operation:PendingOperation):LifecycleSchedulePlan {
+  return this.#store.withTransaction(()=>{
+   const value=this.plan(id);
+   if(value?.kind!=='end'||!this.#isDue(value,this.#now())||operation.action!=='end')throw new StoreError('lifecycle_control_state','没有匹配的到期结束约定。',409);
+   value.status='ending';value.schedule.status='stop_pending';
+   value.endOperation={id:operation.id,requestedVersion:operation.requestedVersion};
+   this.#writePlan(value);return structuredClone(value);
+  });
+ }
+ completePlan(id:string):LifecycleSchedulePlan {
+  return this.#store.withTransaction(()=>{
+   const value=this.plan(id);
+   if(value?.kind==='resume'&&value.status==='active')value.schedule.status='stop_pending';
+   else if(value?.kind==='end'&&value.status==='ending')value.schedule.status='stopped';
+   else throw new StoreError('lifecycle_control_state','生命周期约定未到期或已收束。',409);
+   value.status='completed';this.#writePlan(value);return structuredClone(value);
+  });
+ }
  scheduleUnknown(id:string,sessionId:string):LifecycleSchedulePlan{return this.#store.withTransaction(()=>{const value=this.plan(id);if(!value||value.schedule.sessionId!==sessionId)return value??{...this.plan(id)!};value.status='unknown';value.schedule.status='unknown';this.#writePlan(value);return structuredClone(value);});}
  scheduleStopped(id:string):LifecycleSchedulePlan{return this.#store.withTransaction(()=>{const value=this.plan(id);if(!value||!value.schedule.id)throw new StoreError('lifecycle_control_state','没有准确生命周期调度身份。',409);value.schedule.status='stopped';this.#writePlan(value);return structuredClone(value);});}
  #writePlan(value:LifecycleSchedulePlan){this.#store.connection.prepare('INSERT INTO lifecycle_schedule_plans VALUES (?,?,?) ON CONFLICT(delegation_id,id) DO UPDATE SET value=excluded.value').run(this.#delegationId,value.id,JSON.stringify(value));}

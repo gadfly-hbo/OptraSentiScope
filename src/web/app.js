@@ -54,7 +54,7 @@ function preferencesForm() {
   const preferences = state.detail?.notificationPreferences;
   if (!preferences) return '';
   const weekdays = [1,2,3,4,5,6,7];
-  return `<details class="history-disclosure"><summary>简报偏好</summary><form id="preferences-form" data-revision="${escapeText(preferences.revision)}"><div class="field"><label for="preference-time">发送时间</label><input id="preference-time" name="time" type="time" value="${escapeText(preferences.time.slice(0,5))}" required></div><div class="field"><label for="preference-timezone">时区</label><input id="preference-timezone" name="timeZone" value="${escapeText(preferences.timeZone)}" required></div><fieldset><legend>星期</legend><div class="checkbox-row">${weekdays.map(day => `<label class="checkbox"><input type="checkbox" name="weekdays" value="${day}" ${preferences.weekdays.includes(day) ? 'checked' : ''}><span>${(['','周一','周二','周三','周四','周五','周六','周日'])[day]}</span></label>`).join('')}</div></fieldset><p class="meta">偏好只影响站内汇总，不限制研究节奏。</p><div class="actions"><button class="primary" type="submit">保存偏好</button></div></form></details>`;
+  return `<details class="history-disclosure" data-disclosure="notification-preferences"><summary>简报偏好</summary><form id="preferences-form" data-revision="${escapeText(preferences.revision)}"><div class="field"><label for="preference-time">发送时间</label><input id="preference-time" name="time" type="time" value="${escapeText(preferences.time.slice(0,5))}" required></div><div class="field"><label for="preference-timezone">时区</label><input id="preference-timezone" name="timeZone" value="${escapeText(preferences.timeZone)}" required></div><fieldset><legend>星期</legend><div class="checkbox-row">${weekdays.map(day => `<label class="checkbox"><input type="checkbox" name="weekdays" value="${day}" ${preferences.weekdays.includes(day) ? 'checked' : ''}><span>${(['','周一','周二','周三','周四','周五','周六','周日'])[day]}</span></label>`).join('')}</div></fieldset><p class="meta">偏好只影响站内汇总，不限制研究节奏。</p><div class="actions"><button class="primary" type="submit">保存偏好</button></div></form></details>`;
 }
 function recordState(value) {
   return ({ pending: '等待执行', running: '执行中', ended: '已收束', progress: '继续研究', waiting: '等待信息', ready: '报告就绪', blocked: '受阻', failed: '失败', dropped: '无须继续', completed: '已完成', stopped: '已停止', saved: '已保存', recorded: '已记录', delivered: '已送达', unavailable: '不可用', revoked: '已撤权' })[value] || value || '尚未记录';
@@ -145,6 +145,8 @@ function render() {
   const disclosureContext = JSON.stringify([state.selectedId, state.tab, state.reminders]);
   const sameDisclosureContext = $('#screen').dataset.disclosureContext === disclosureContext;
   const disclosureState = new Map(sameDisclosureContext ? Array.from($('#screen').querySelectorAll('details[data-disclosure]')).map((element) => [element.dataset.disclosure, element.open]) : []);
+  const previousPreferences = disclosureState.get('notification-preferences') ? $('#preferences-form') : null;
+  const preferenceDraft = previousPreferences ? new FormData(previousPreferences) : null;
   const focusedDisclosure = focused?.tagName === 'SUMMARY' ? focused.closest('details[data-disclosure]')?.dataset.disclosure : null;
   const focusedOutcomeBefore = focusedDisclosure?.startsWith('outcome:') || focusedDisclosure?.startsWith('effect:') ? { key: focusedDisclosure, historyPrefix: focusedDisclosure.startsWith('effect:') ? 'effect-history:' : 'outcome-history:', historical: Boolean(focused.closest('details')?.parentElement?.closest('details')?.dataset.disclosure?.startsWith(focusedDisclosure.startsWith('effect:') ? 'effect-history:' : 'outcome-history:')) } : null;
   const focusedArtifact = focused?.dataset.artifactId && focused?.dataset.artifactVersion ? { artifactId: focused.dataset.artifactId, version: Number(focused.dataset.artifactVersion) } : null;
@@ -166,6 +168,16 @@ function render() {
   $('#screen').innerHTML = `${errorNotice()}${content}`;
   $('#screen').dataset.disclosureContext = disclosureContext;
   for (const element of $('#screen').querySelectorAll('details[data-disclosure]')) if (disclosureState.has(element.dataset.disclosure)) element.open = disclosureState.get(element.dataset.disclosure);
+  if (preferenceDraft) {
+    const preferencesForm = $('#preferences-form');
+    // Polling preserves local edits only for the same delegation and saved revision.
+    if (preferencesForm && preferencesForm.dataset.revision === previousPreferences.dataset.revision) {
+      preferencesForm.elements.namedItem('time').value = preferenceDraft.get('time');
+      preferencesForm.elements.namedItem('timeZone').value = preferenceDraft.get('timeZone');
+      const weekdays = new Set(preferenceDraft.getAll('weekdays'));
+      for (const input of preferencesForm.querySelectorAll('input[name="weekdays"]')) input.checked = weekdays.has(input.value);
+    }
+  }
   $('#screen').dataset.context = state.selectedId ? JSON.stringify(['delegation', state.selectedId]) : state.reminders ? 'reminders' : 'overview';
   if (focusRegion && focused !== document.body && !focused.isConnected) {
     let replacement = null;

@@ -49,6 +49,36 @@ test('lifecycle control request replay keeps its original receipt across later r
  }finally{store.close();rmSync(directory,{recursive:true,force:true});}
 });
 
+test('pausing one direction preserves native steps and permits resuming an independent worker',async()=>{
+ const f=await boot();
+ const id=f.delegation.id;
+ const invoke=(run,name,args)=>run.options.tools.find(tool=>tool.name===name).execute(args,{signal:new AbortController().signal});
+ try {
+  const main=f.opened.filter(run=>run.binding.role==='main').at(-1);
+  const {candidates}=await invoke(main,'research_context',{});
+  const candidate=candidates[0];
+  const {decision}=await invoke(main,'decide_event',{triggerId:candidate.triggers[0].id,evalId:candidate.evalId,kind:'accept',title:'Independent direction',scope:'P1',reason:'Synthetic direction test'});
+  await f.coordinator.sync(id);
+  const worker=()=>f.opened.filter(run=>run.binding.role==='worker').at(-1);
+  const first=worker();
+  assert.ok(first);
+  const pauseP2=f.coordinator.pauseResearch(id,{expectedRevision:0,mode:'direction',scope:'P2',reason:'P2 waits',idempotencyKey:'pause-p2'});
+  await f.coordinator.sync(id);
+  assert.equal(await first.options.beforeStep(first.binding,{scheduledOnly:false}),true,'P1 can proceed while P2 waits');
+  const pauseP1=f.coordinator.pauseResearch(id,{expectedRevision:pauseP2.revision,mode:'direction',scope:'P1',reason:'P1 temporarily waits',idempotencyKey:'pause-p1'});
+  assert.equal(first.options.admit(first.binding,'tool'),false,'a paused worker loses admission before cleanup');
+  await f.coordinator.sync(id);
+  f.coordinator.resumeResearch(id,{expectedRevision:pauseP1.revision,scope:'P1',reason:'P1 is ready',idempotencyKey:'resume-p1'});
+  await f.coordinator.sync(id);
+  const resumed=worker();
+  assert.notEqual(resumed.handle.sessionId,first.handle.sessionId);
+  assert.equal(await resumed.options.beforeStep(resumed.binding,{scheduledOnly:false}),true);
+  await invoke(resumed,'report_research',{state:'progress',summary:'Separate work advanced',evidence:[]});
+  assert.ok(f.coordinator.detail(id).artifacts.some(report=>report.ticketId===decision.ticketId&&report.summary==='Separate work advanced'));
+  assert.deepEqual(f.coordinator.detail(id).lifecycleControls.status.pausedScopes,['P2']);
+ } finally {await f.close();}
+});
+
 test('scheduled resume and end use one persisted native lifecycle schedule intent each',async()=>{
  const f=await boot();try{
   const at=new Date(Date.now()+60000).toISOString();

@@ -28,7 +28,7 @@ import {IntakeStore} from './intake.ts';
 import type {SaveIntakeSummary} from './intake.ts';
 import {LifecycleControlsStore} from './lifecycle-controls.ts';
 import type {NotificationTaskPlan} from './notification-schedules.ts';
-import type {NativeResearchPort, NativeResearchHandle, RunBinding, NativeOpenOptions} from '../runtime/index.ts';
+import type {AdmissionPhase, NativeResearchPort, NativeResearchHandle, RunBinding, NativeOpenOptions} from '../runtime/index.ts';
 
 type EngineFactory = new(options:EngineOptions)=>Engine;
 export interface ResearchOptions {
@@ -125,7 +125,8 @@ export class ResearchCoordinator {
   async start():Promise<void> {for(const d of this.#o.store.list(this.#o.owner))await this.sync(d.id);}
   sync(id:string):Promise<void> {return this.#queue(()=>this.#sync(id));}
   async #sync(id:string):Promise<void> {
-    if(this.#closing)return;let d=this.#get(id);const u=this.#unit(id);
+    if(this.#closing||await this.#applyDueLifecyclePlans(id))return;
+    let d=this.#get(id);const u=this.#unit(id);
     if(d.lifecycle!=='active') {await this.#retire(id);return;}
     await this.#scanSources(id);
     d=this.#get(id);if(d.lifecycle!=='active')return;
@@ -150,11 +151,12 @@ export class ResearchCoordinator {
         const ticket=u.db.repo.tickets.open().find(item=>item.assignments.at(-1)?.id===live.run.binding.assignmentId);
         if(control.pausedScopes.length===0||u.lifecycleControls.blocksScope(ticket?.mandate.scope))await this.#closeRun(live);
       }
-      await this.#applyLifecyclePlans(main);return;
+      if(control.pausedScopes.length===0){await this.#applyLifecyclePlans(main);return;}
     }
     await this.#applyFollowups(main);
     await this.#applyNotificationSchedules(main);
     await this.#applyLifecyclePlans(main);
+    if(await this.#applyDueLifecyclePlans(id))return;
     // Running assignments retain Engine identity even if a source qualification requires a fresh native history.
     for(const ticket of u.db.repo.tickets.open()) {
       const assignment=ticket.assignments.at(-1);
@@ -164,23 +166,56 @@ export class ResearchCoordinator {
   }
   isCurrentBinding(binding:RunBinding):boolean {return this.#admit(binding);}
   async #applyDueLifecyclePlans(id:string):Promise<boolean> {
-    const u=this.#unit(id);
-    for(const due of u.lifecycleControls.duePlans()){
-      const completed=u.lifecycleControls.completePlan(due.id);
-      if(completed.kind==='resume'){
-        const state=u.lifecycleControls.status();
-        u.lifecycleControls.resumeResearch({expectedRevision:state.revision,reason:completed.reason,idempotencyKey:`lifecycle-${due.id}`});
-        this.#fact(id,'lifecycle_resume_due',{planId:due.id,at:due.at,reason:due.reason});
-        continue;
+    const store=this.#o.store,owner=this.#o.owner,controls=this.#unit(id).lifecycleControls;
+    const delegation=this.#get(id),pending=delegation.pendingOperation;
+    let endPlan;
+    if(delegation.lifecycle==='ending'&&pending?.action==='end'){
+      endPlan=controls.plans().find(plan=>plan.status==='ending'&&plan.endOperation?.id===pending.id&&plan.endOperation.requestedVersion===pending.requestedVersion);
+    }else if(delegation.lifecycle==='active'||delegation.lifecycle==='paused'){
+      for(const due of controls.duePlans()){
+        if(due.kind==='end'){
+          // Commit the operation and plan together so admission closes before native cleanup.
+          endPlan=store.withTransaction(()=>{
+            const current=this.#get(id);
+            if(current.lifecycle!=='active'&&current.lifecycle!=='paused')return;
+            const requested=store.requestLifecycle(owner,id,{expectedVersion:current.version,action:'end',idempotencyKey:`lifecycle-${due.id}`});
+            if(!requested.pendingOperation)throw new StoreError('lifecycle_control_state','结束操作回执不匹配。',409);
+            return controls.beginEnd(due.id,requested.pendingOperation);
+          });
+          break;
+        }
+        if(delegation.lifecycle==='paused')continue;
+        store.withTransaction(()=>{
+          controls.resumeResearch({expectedRevision:controls.status().revision,reason:due.reason,idempotencyKey:`lifecycle-${due.id}`});
+          controls.completePlan(due.id);
+          this.#fact(id,'lifecycle_resume_due',{planId:due.id,at:due.at,reason:due.reason});
+        });
       }
-      await this.#retire(id);
-      const before=this.#get(id),requested=this.#o.store.requestLifecycle(this.#o.owner,id,{expectedVersion:before.version,action:'end',idempotencyKey:`lifecycle-${due.id}`}),operation=requested.pendingOperation!;
-      this.#o.store.completeLifecycle(this.#o.owner,id,{operationId:operation.id,expectedVersion:operation.requestedVersion,outcome:'stopped',evidence:`Scheduled end plan ${due.id} due at ${due.at}; Host retired owned native resources.`});
-      u.lifecycleControls.scheduleStopped(due.id);
-      this.#fact(id,'lifecycle_end_due',{planId:due.id,at:due.at,reason:due.reason});
-      return true;
     }
-    return false;
+    const operation=endPlan?.endOperation;
+    if(!endPlan||!operation)return false;
+    const {id:scheduleId,sessionId}=endPlan.schedule;
+    let stopConfirmed:boolean;
+    try{
+      await this.#retire(id);
+      stopConfirmed=Boolean(scheduleId&&sessionId&&this.#runRows(id).some(run=>
+        run.state==='retired'&&run.binding.role==='main'&&run.sessionId===sessionId&&run.schedules.includes(scheduleId)));
+    }catch{
+      stopConfirmed=false;
+    }
+    const evidence=`Scheduled end plan ${endPlan.id} due at ${endPlan.at}; ${stopConfirmed
+      ?'owned native resources and the recorded timer are stopped.'
+      :'owned native resources or the recorded timer lack a confirmed stop.'}`;
+    store.withTransaction(()=>{
+      const current=this.#get(id),pending=current.pendingOperation;
+      if(current.lifecycle!=='ending'||pending?.id!==operation.id||pending.requestedVersion!==operation.requestedVersion)return;
+      store.completeLifecycle(owner,id,{operationId:operation.id,expectedVersion:operation.requestedVersion,outcome:stopConfirmed?'stopped':'unknown',evidence});
+      if(stopConfirmed){
+        controls.completePlan(endPlan.id);
+        this.#fact(id,'lifecycle_end_due',{planId:endPlan.id,at:endPlan.at,reason:endPlan.reason});
+      }
+    });
+    return true;
   }
   async verifyModelInput(binding:RunBinding):Promise<void> {
     if(!this.#admit(binding))throw new StoreError('stale_egress_binding','当前研究资格已变化。',409);
@@ -202,21 +237,26 @@ export class ResearchCoordinator {
   #sourceTrigger(id:string,event:SourceEvent):Trigger {return {...this.#trigger(id,event.eventId,'authorized-source',JSON.stringify(event)),at:event.observedAt,meta:{delegationId:id,goalRevision:this.#get(id).goalRevision,eventId:event.eventId,ref:event.ref,kind:event.kind}};}
   #runRows(id:string):Run[] {return this.#o.store.connection.prepare('SELECT value FROM research_runs WHERE delegation_id=? ORDER BY generation').all(id).map(r=>JSON.parse(r.value as string) as Run);}
   #saveRun(run:Run) {this.#o.store.connection.prepare('INSERT INTO research_runs VALUES (?,?,?,?) ON CONFLICT(key,generation) DO UPDATE SET value=excluded.value').run(run.key,run.binding.delegationId,run.binding.generation,JSON.stringify(run));}
-  #admit(binding:RunBinding):boolean {
+  #admit(binding:RunBinding,phase?:AdmissionPhase):boolean {
     if(this.#closing)return false;
     const d=this.#o.store.scope(this.#o.owner,binding.delegationId);const u=this.#unit(d.id);
     if(d.lifecycle!=='active'||d.goalRevision!==binding.goalRevision||u.sources.qualificationEpoch()!==binding.epoch)return false;
+    // Let the official resolver wake the Host, but fence ordinary native work
+    // even while the reconciliation queue is still waiting to persist the end.
+    if(phase!=='schedule'&&u.lifecycleControls.duePlans().some(plan=>plan.kind==='end'))return false;
     const raw=this.#o.store.connection.prepare('SELECT value FROM research_runs WHERE delegation_id=? AND key=? ORDER BY generation DESC LIMIT 1').get(d.id,this.#key(d.id,binding.role,binding.assignmentId));const row=raw?JSON.parse(raw.value as string) as Run:undefined;
     if(!row||row.state!=='current'||row.binding.generation!==binding.generation)return false;
-    if(binding.role==='worker') {const t=u.db.repo.tickets.open().find(t=>t.assignments.at(-1)?.id===binding.assignmentId);if(!t||t.mandate.policyVersion!==String(d.goalRevision)||t.assignments.at(-1)?.state!=='running')return false;}
+    if(binding.role==='worker') {const t=u.db.repo.tickets.open().find(t=>t.assignments.at(-1)?.id===binding.assignmentId);if(!t||t.mandate.policyVersion!==String(d.goalRevision)||t.assignments.at(-1)?.state!=='running'||u.lifecycleControls.blocksScope(t.mandate.scope))return false;}
     return true;
   }
   #key(id:string,role:string,assignment?:string) {return JSON.stringify([id,role,assignment??'']);}
   #trackEvidence(binding:RunBinding,evidence:readonly ArtifactEvidence[]):void {for(const ref of evidence)this.#o.store.connection.prepare('INSERT OR IGNORE INTO research_reads VALUES (?,?,?)').run(this.#key(binding.delegationId,binding.role,binding.assignmentId),binding.generation,ref.ref);}
   async #ensure(id:string,role:'main'|'worker',assignmentId?:string,ticket?:Ticket):Promise<Live> {
+    const u=this.#unit(id);
+    if(u.lifecycleControls.duePlans().some(plan=>plan.kind==='end'))throw new StoreError('lifecycle_end_due','委托到期，等待 Host 确认停止。',409);
     const key=this.#key(id,role,assignmentId);const live=this.#live.get(key);if(live&&this.#admit(live.run.binding))return live;
     if(live)await this.#closeRun(live);
-    const d=this.#get(id),u=this.#unit(id),prior=this.#runRows(id).filter(r=>r.key===key).at(-1);
+    const d=this.#get(id),prior=this.#runRows(id).filter(r=>r.key===key).at(-1);
     const epoch=u.sources.qualificationEpoch();
     if(prior?.scheduleState==='unknown')throw new StoreError('schedule_unknown','原生定时创建回执未确认；隔离此委托，需核对后恢复。',409);
     const resumable=prior?.state==='current'&&prior.binding.goalRevision===d.goalRevision&&prior.binding.epoch===epoch;
@@ -225,8 +265,18 @@ export class ResearchCoordinator {
     this.#saveRun(run);
     if(resumable)this.#o.store.connection.prepare('INSERT OR IGNORE INTO research_reads SELECT run_key,?,ref FROM research_reads WHERE run_key=? AND generation=?').run(run.binding.generation,key,prior.binding.generation);
     let handle:NativeResearchHandle;
-    try {handle=await this.#o.native.open(run.binding,{model:this.#o.model,sessionId:run.sessionId,resume:resumable,tools:this.#tools(run.binding,ticket),scheduleIds:run.schedules,admit:b=>this.#admit(b),
-      beforeStep:async(b,fact)=>{const refs=this.#o.store.connection.prepare('SELECT ref FROM research_reads WHERE run_key=? AND generation=?').all(run.key,b.generation).map(row=>row.ref as string);for(const ref of new Set([...refs,...u.sources.listReferences().map(r=>r.ref)]))await u.sources.checkCurrent(ref);if(!this.#admit(b))return false;const lifecycle=u.lifecycleControls.status();if(lifecycle.researchPaused&&!(fact?.scheduledOnly&&u.lifecycleControls.duePlans().length>0))return false;if(role==='main'&&fact?.scheduledOnly&&u.followups.shouldObserve(b)){const work=this.#notificationWork(b);if(!work.brief&&!work.immediate.length&&!work.decisions.length&&!u.cognition.hasPending(b))return false;}return true;},
+    try {handle=await this.#o.native.open(run.binding,{model:this.#o.model,sessionId:run.sessionId,resume:resumable,tools:this.#tools(run.binding,ticket),scheduleIds:run.schedules,admit:(b,phase)=>this.#admit(b,phase),
+      beforeStep:async(b,fact)=>{
+        const refs=this.#o.store.connection.prepare('SELECT ref FROM research_reads WHERE run_key=? AND generation=?').all(run.key,b.generation).map(row=>row.ref as string);
+        for(const ref of new Set([...refs,...u.sources.listReferences().map(r=>r.ref)]))await u.sources.checkCurrent(ref);
+        if(!this.#admit(b))return false;
+        if(role==='main'&&u.lifecycleControls.blocksScope(undefined)&&!(fact?.scheduledOnly&&u.lifecycleControls.duePlans().length>0))return false;
+        if(role==='main'&&fact?.scheduledOnly&&u.followups.shouldObserve(b)){
+          const work=this.#notificationWork(b);
+          if(!work.brief&&!work.immediate.length&&!work.decisions.length&&!u.cognition.hasPending(b))return false;
+        }
+        return true;
+      },
       onRead:fact=>{this.#o.store.withTransaction(()=>{this.#o.store.connection.prepare('UPDATE research_messages SET read_at=? WHERE id=? AND session_id=?').run(new Date().toISOString(),fact.messageId,fact.sessionId);if(!this.#admit(fact.binding))return;
         const row=this.#o.store.connection.prepare('SELECT * FROM research_messages WHERE id=?').get(fact.messageId);if(row&&ticket){const info=JSON.parse(row.detail as string);if(info.inputIds){for(const inputId of info.inputIds)this.#o.store.connection.prepare('INSERT OR IGNORE INTO research_input_reads VALUES (?,?)').run(inputId,new Date().toISOString());u.engine.inputsDelivered(ticket.id,assignmentId!,info.inputIds);u.engine.inputsRead(ticket.id,info.inputIds);}}
         this.#fact(id,'native_read',{role,messageId:fact.messageId,generation:fact.binding.generation});});},
@@ -344,7 +394,12 @@ export class ResearchCoordinator {
       const pending=u.db.listPending();if(!pending.length)return;
       let progressed=false;
       for(const item of pending) {
-        if(this.#get(id).lifecycle!=='active')return;
+        if(this.#get(id).lifecycle!=='active'||u.lifecycleControls.duePlans().some(plan=>plan.kind==='end'))return;
+        if(item.kind==='start'||item.kind==='deliver') {
+          const ticket=u.db.repo.tickets.get(item.payload.ticketId as string);
+          // Keep paused work pending without claiming it, so unrelated intents can advance.
+          if(ticket&&u.lifecycleControls.blocksScope(ticket.mandate.scope))continue;
+        }
         const intent=u.db.claim(item.id);if(!intent)continue;progressed=true;
         let attempted=false;
         try {
@@ -501,8 +556,10 @@ export class ResearchCoordinator {
     cognition?.pause();
     const notificationTasks=live.run.binding.role==='main'?this.#unit(live.run.binding.delegationId).notificationSchedules:undefined;
     const notificationPlans=notificationTasks?.pause()??[];
+    const lifecyclePlans=live.run.binding.role==='main'?this.#unit(live.run.binding.delegationId).lifecycleControls.plans():[];
     if(planned.some(r=>['creating','unknown'].includes(r.schedule.status)&&(!r.schedule.id||r.schedule.sessionId!==live.run.sessionId)))errors.push(new Error('Observation Schedule receipt remains unknown'));
     if(notificationPlans.some(r=>['creating','unknown'].includes(r.schedule.status)&&(!r.schedule.id||r.schedule.sessionId!==live.run.sessionId)))errors.push(new Error('Notification Schedule receipt remains unknown'));
+    if(lifecyclePlans.some(plan=>['creating','unknown'].includes(plan.schedule.status)&&(!plan.schedule.id||plan.schedule.sessionId!==live.run.sessionId)))errors.push(new Error('Lifecycle Schedule receipt remains unknown'));
     const stopped=new Set<string>();
     for(const schedule of live.run.schedules)try{await live.handle.disableSchedule(schedule);stopped.add(schedule);}catch(error){errors.push(error);}
     for(const record of planned)if(record.schedule.id&&record.schedule.sessionId===live.run.sessionId&&['stop_pending','unknown'].includes(record.schedule.status)) {
@@ -523,10 +580,17 @@ export class ResearchCoordinator {
     await this.#closeRun({run,handle});
   }
   async #retire(id:string):Promise<void> {
-    for(const live of [...this.#live.values()])if(live.run.binding.delegationId===id)await this.#closeRun(live);
+    const errors:unknown[]=[], attempted=new Set<string>();
+    for(const live of [...this.#live.values()])if(live.run.binding.delegationId===id){
+      attempted.add(live.run.key);
+      try{await this.#closeRun(live);}catch(error){errors.push(error);}
+    }
     const latest=new Map(this.#runRows(id).map(run=>[run.key,run]));
-    for(const run of latest.values())if(run.state!=='retired')await this.#retireRecorded(run);
+    for(const run of latest.values())if(run.state!=='retired'&&!attempted.has(run.key)){
+      try{await this.#retireRecorded(run);}catch(error){errors.push(error);}
+    }
     this.#unit(id).notificationSchedules.pause();
+    if(errors.length)throw new AggregateError(errors,'Native resources not confirmed stopped');
   }
   detail(id:string):Record<string,unknown> {
     const d=this.#get(id);

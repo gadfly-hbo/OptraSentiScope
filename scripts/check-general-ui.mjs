@@ -20,8 +20,17 @@ try{
  await browser('wait','--fn','document.querySelector("#screen").textContent.includes("目标值是多少？")');await browser('snapshot','-i');
  await browser('click','[data-action="research-control"]');await browser('select','#lifecycle-action','pause');await browser('select','#lifecycle-mode','direction');await browser('fill','#lifecycle-scope','复购提升');await browser('fill','#lifecycle-reason','等待目标值');await browser('click','#lifecycle-form button[type="submit"]');
  await browser('wait','--fn','document.querySelector("#screen").textContent.includes("暂停方向：复购提升")');
- await browser('click','details:has(#preferences-form) > summary');await browser('fill','#preference-time','09:00');await browser('fill','#preference-timezone','UTC');await browser('check','input[name="weekdays"][value="6"]');await browser('click','#preferences-form button[type="submit"]');
- await browser('wait','--fn','document.querySelector("#screen").textContent.includes("周六")');
+ await browser('eval',`document.querySelector('#preferences-form').closest('details').querySelector('summary').click()`);
+ await browser('wait','--fn',`document.querySelector('#preferences-form')?.closest('details').open === true`);
+ // The browser driver fill command does not reliably set a native time input.
+ await browser('eval',`(() => { const input = document.querySelector('#preference-time'); input.focus(); input.value = '09:00'; input.dispatchEvent(new Event('input', {bubbles:true})); return input.value; })()`);
+ await browser('check','#preferences-form input[value="6"]');
+ await browser('wait','5500');
+ const edited=await browser('eval',`document.querySelector('#preferences-form').closest('details').open && document.querySelector('#preference-time').value === '09:00' && document.querySelector('#preferences-form input[value="6"]').checked`);
+ assertBrowser(edited,'true');
+ await browser('eval',`document.querySelector('#preferences-form button[type="submit"]').click()`);
+ await browser('wait','--fn',`document.querySelector('#preferences-form')?.dataset.revision === '2' && document.querySelector('#preference-time')?.value === '09:00' && document.querySelector('#preferences-form input[value="6"]')?.checked === true`);
+ assertBrowser(JSON.stringify(preferences),JSON.stringify({timeZone:'UTC',time:'09:00:00',weekdays:[1,2,3,4,5,6],revision:2}));
  await browser('set','viewport','390','844');await browser('wait','--fn','document.documentElement.scrollWidth<=innerWidth');await browser('screenshot',join(output,'mobile.png'));assertBrowser(await browser('errors'),'');
   writeFileSync(join(output,'result.json'),JSON.stringify({status:'PASS',identity,commands,control,preferences,hostURL:host.url},null,2)+'\n');
 }catch(cause){error={name:cause.name,message:cause.message};writeFileSync(join(output,'result.json'),JSON.stringify({status:'FAIL',error,commands,control,preferences},null,2)+'\n');}
