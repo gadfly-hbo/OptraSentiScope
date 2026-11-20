@@ -33,6 +33,7 @@
 | `npm run check` | PASS：准备检查、29 个产品文件 public SDK roots 边界与 3 个绕过反例、typecheck、289 tests、native/research/recovery/host-controls/artifact-followup/artifact-cold/operator-decisions/notifications/outcomes/effect-assessments/cognition-reassessment/experiences 官方或隔离链。最新证据见下表。 |
 | `npm run check:general-ui` | PASS：`.local/general-ui-checks/run-Bbux7T/result.json`。真实外部浏览器驱动本地合成 Host 投影，验证委托摘要、局部等待、研究控制、偏好持久化、390px 无横向滚动和浏览器错误为空；result 记录 Node、干净代码提交 `6cd286c99faf01ff324d7fc6c4d2efdc3b9ba964`、`sourceDirty:false` 与 5 个关键产品文件 SHA256。该脚本依赖本机外部 `agent-browser`，CI Ubuntu 不安装该工具；因此沿用仓库既有浏览器检查单独执行模式，不纳入 CI 的 `npm run check`，不把 CI 结果表述为浏览器验证。 |
 | `npm audit --audit-level=high` | PASS：`found 0 vulnerabilities`。未新增运行依赖。 |
+| GitHub CI | PASS（针对代码回执提交 `d9a74240477aaf8a450185989912139de548739c`）：PR [#2](https://github.com/gadfly-hbo/OptraSentiScope/pull/2) 的 `check` job 通过，用时 5m21s；Actions run `44757134543`。本文后续写回提交会触发新一轮 PR head 检查，最终以新 head 的平台结果为准。 |
 
 最新完整链关键证据：
 
@@ -58,7 +59,7 @@
 - 状态：复核修复与受影响重验已完成。首轮独立报告：Spec R2 `PASS_WITH_FINDINGS`，见 `.local/independent/general-v01-completion-spec-r2/REPORT.md`；Standards R2 `FAIL`，见 `.local/independent/general-v01-completion-standards-r2/REPORT.md`。
 - 修复重验：Standards R3 `PASS`，F01–F05全部 RESOLVED，见 `.local/independent/general-v01-completion-standards-r2/REVIEW-R3.md`；Spec R3 `PASS_WITH_FINDINGS`，F-01/F-02/F-03 RESOLVED，F-04由本节自然 Schedule 组合说明修正，见 `.local/independent/general-v01-completion-spec-r2/REVIEW-R3.md`。随后 Spec R4 因11-20盘点一句状态过期判 `FAIL`；作者修正后 Spec R5 `PASS`，见同目录 `REVIEW-R4.md` / `REVIEW-R5.md`。
 - 代码修复固定于 `6cd286c99faf01ff324d7fc6c4d2efdc3b9ba964`；本结果记录更新只涉及交付说明，不改变已重验产品字节。
-- 待完成：对包含本回执的最终 Git head 运行实际 GitHub CI，并记录平台结果；本地检查不表述为 CI PASS。
+- CI结果：PR [#2](https://github.com/gadfly-hbo/OptraSentiScope/pull/2) 对 `d9a74240477aaf8a450185989912139de548739c` 的实际 `check` job PASS（5m21s，Actions run `44757134543`）。本写回提交推送后需等待新一轮实际 head 检查；本地检查不表述为 CI PASS。
 - CI 说明：workflow 仅 PR、main push 和手动 dispatch 触发；普通工作分支 push 不触发。最终提交需 PR 或手动 dispatch 后核对实际 head 的 Check 结果。本地 `npm run check` 不表述为 CI PASS。
 
 ## 仍未完成 / 阻塞
