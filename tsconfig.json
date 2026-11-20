@@ -1,0 +1,58 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ES2024"
+    ],
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": false,
+    "paths": {
+      "dsh-superagent": [
+        "./.local/official-sdk/superagent/lib/index.d.ts"
+      ],
+      "@deepseek-ai/cordis": [
+        "./.local/official-sdk/harness/node_modules/@deepseek-ai/cordis/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/schemastery": [
+        "./.local/official-sdk/harness/node_modules/@deepseek-ai/schemastery/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-agent": [
+        "./.local/official-sdk/harness/node_modules/@deepseek-ai/dsh-agent/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-session": [
+        "./.local/official-sdk/harness/node_modules/@deepseek-ai/dsh-session/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-llm": [
+        "./.local/official-sdk/harness/node_modules/@deepseek-ai/dsh-llm/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-tools": [
+        "./.local/official-sdk/harness/node_modules/@deepseek-ai/dsh-tools/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-schedule": [
+        "./.local/official-sdk/harness/node_modules/@deepseek-ai/dsh-schedule/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-credentials": [
+        "./.local/official-sdk/harness/node_modules/@deepseek-ai/dsh-credentials/lib/types/index.d.ts"
+      ],
+      "@deepseek-ai/dsh-timeout": [
+        "./.local/official-sdk/harness/node_modules/@deepseek-ai/dsh-timeout/lib/types/index.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "scripts/**/*.ts",
+    "runtime/**/*.ts"
+  ]
+}

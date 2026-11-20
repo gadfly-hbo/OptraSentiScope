@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>OptraSentiScope · 经营者工作台</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div id="service-status" class="service-status" role="status">正在连接工作台…</div>
+  <div class="shell">
+    <aside class="sidebar" aria-label="工作台导航">
+      <a class="brand" href="#overview" data-action="overview" aria-label="OptraSentiScope 经营者工作台"><span class="brand-mark small" aria-hidden="true"><span></span><i></i></span><div><strong>OptraSentiScope</strong><span>持续做出更好的决策</span></div></a>
+      <nav class="primary-nav" aria-label="主要导航">
+        <button class="nav-button" data-action="overview" id="overview-nav"><span aria-hidden="true">▦</span> 委托总览</button>
+        <button class="nav-button" data-action="reminders" id="reminders-nav"><span aria-hidden="true">◇</span> 待决提醒 <span id="reminder-count" class="nav-count">0</span></button>
+      </nav>
+      <div class="side-section"><p class="eyebrow">当前委托</p><div id="mandate-nav"><p class="meta">正在载入…</p></div></div>
+      <div class="side-footer"><span class="status-dot muted-dot"></span><strong>Call 待接入</strong><p>Call 接缝尚未接通，资料覆盖和缺口在委托内查看。</p></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar"><span class="workspace-name">经营者工作台</span><div class="inline-actions"><span id="connection-status" class="meta">连接中</span><button id="theme-toggle" class="icon-button" data-action="theme" aria-label="切换为亮色主题" title="切换主题">☀</button></div></header>
+      <main id="main" tabindex="-1"><div id="screen"><div class="empty-state"><h1>正在载入委托</h1><p>正在读取 Host 保存的当前状态。</p></div></div></main>
+      <footer class="page-footer">
+        <p>委托和已有记录由 Host 保存。关闭工作台不改变委托状态，研究进展以可核实的运行事实为准。</p>
+        <details class="boundary-note">
+          <summary>运行与资料边界</summary>
+          <div class="boundary-content">
+            <p>Host 管理运行环境、权限、凭据和资源；Agent 在获准范围内自主选择研究方法。运行资格未就绪时，不开始研究。</p>
+            <dl class="definition-list">
+              <div><dt>模型输入</dt><dd>仅向获准模型提供获准内容，历史、摘要、工具结果和附件同样受当前资格约束。</dd></div>
+              <div><dt>外部研究与连接器</dt><dd>限获准来源和网络范围，来源状态与委托状态分别记录。</dd></div>
+              <div><dt>提醒与导出</dt><dd>限接收人、渠道和内容范围；知悉不等于采纳，沉默不构成授权。</dd></div>
+              <div><dt>日志、监控与备份</dt><dd>留在企业控制范围，避免凭据和不必要正文进入日志。</dd></div>
+            </dl>
+            <p>当前可用能力及未就绪条件在运行状态与委托资料中列明；页面显示不代替实际隔离或接入验证。</p>
+          </div>
+        </details>
+      </footer>
+    </div>
+  </div>
+  <dialog id="modal" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>

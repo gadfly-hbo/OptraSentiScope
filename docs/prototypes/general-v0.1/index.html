@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>OptraSentiScope · 经营者工作台 · 关键交互演示</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <script src="demo.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="demo-banner">交互演示 · 虚构资料 · 仅内存状态 · 未调用模型或来源 <span>Call 待接入 · UI 候选，待用户确认</span></div>
+  <div class="shell">
+    <aside class="sidebar" aria-label="工作台导航">
+      <a class="brand" href="#overview" data-action="overview" aria-label="OptraSentiScope 经营者工作台"><span class="brand-mark small" aria-hidden="true"><span></span><i></i></span><div><strong>OptraSentiScope</strong><span>持续做出更好的决策</span></div></a>
+      <nav class="primary-nav" aria-label="主要导航">
+        <button class="nav-button" data-action="overview" id="overview-nav"><span aria-hidden="true">▦</span> 委托总览</button>
+        <button class="nav-button" data-action="reminders" id="reminders-nav"><span aria-hidden="true">◇</span> 待决提醒 <span id="reminder-count" class="nav-count">1</span></button>
+      </nav>
+      <div class="side-section"><p class="eyebrow">当前委托</p><div id="mandate-nav"></div></div>
+      <div class="side-footer"><span class="status-dot muted-dot"></span><strong>Call 待接入</strong><p>本演示没有读取 Call，也未连接任何实际来源。</p></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar"><span class="workspace-name">经营者工作台 <span class="muted">/ 交互候选</span></span><div class="inline-actions"><span id="demo-clock" class="meta">演示第 1 日</span><button id="theme-toggle" class="icon-button" data-action="theme" aria-label="切换为亮色主题" title="切换主题">☀</button></div></header>
+      <main id="main" tabindex="-1">
+        <div id="screen"></div>
+        <details class="scenario-panel" id="scenario-panel"><summary><span>演示情境</span><span class="meta">显式模拟状态变化，普通使用无需操作</span></summary><div id="scenario-content"></div></details>
+      </main>
+      <footer class="page-footer">
+        <p>此页面只演示交互。刷新即重置，关闭页面后不会继续工作；真实持续研究与安全控制尚未验证。</p>
+        <details class="boundary-note">
+          <summary>运行与资料边界（设计说明）</summary>
+          <div class="boundary-content">
+            <p><strong>正式产品计划：</strong>由常驻 Host（运行环境）持续承接委托，浏览器只提供工作台，不承担持续运行责任。资源、凭据与隔离由 Host 维护；Agent 在获准范围内自主选择研究方法。</p>
+            <p>以下是尚未实现或验证的资料出口约束，按企业及委托的授权范围执行：</p>
+            <dl class="definition-list">
+              <div><dt>模型输入</dt><dd>只向获准模型发送获准内容，相关历史、摘要、结果与附件也受同一范围约束。</dd></div>
+              <div><dt>外部研究与连接器</dt><dd>按获准来源和网络范围开放；内部资料访问与外部研究分别限定。</dd></div>
+              <div><dt>提醒与导出</dt><dd>限定接收人、渠道和内容，默认优先摘要与事项链接。</dd></div>
+              <div><dt>日志、监控与备份</dt><dd>保留在企业控制范围，避免凭据和不必要正文进入日志；额外会话日志上传关闭。</dd></div>
+            </dl>
+            <p><strong>当前 Demo 无真实产品运行：</strong>没有调用模型或来源，不提供常驻研究，也不能证明上述控制实际生效。</p>
+          </div>
+        </details>
+      </footer>
+    </div>
+  </div>
+  <dialog id="modal" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>

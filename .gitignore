@@ -31,7 +31,6 @@ secrets.*.json
 /data/
 /datasets/
 /workspaces/
-/runtime/
 /.runtime/
 /sessions/
 /logs/
