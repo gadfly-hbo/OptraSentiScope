@@ -17,7 +17,7 @@ export interface SaveIntakeSummary {requestId:string;expectedRevision:number;rea
 export interface IntakeRevision extends Omit<SaveIntakeSummary,'expectedRevision'> {
  id:string;revision:number;createdAt:string;goalRevision:number;epoch:number;actor:{role:'main';generation:number};supersedes:{id:string;revision:number}|null;
 }
-export interface IntakeOptions {isCurrent(binding:RunBinding):boolean;now?():string;}
+export interface IntakeOptions {isCurrent(binding:RunBinding):boolean;experienceExactCurrent(ref:{id:string;version:number}):boolean;now?():string;}
 const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function invalid():never{throw new StoreError('intake_invalid','委托摘要字段或准确版本无效。');}
 function object(value:unknown,keys:readonly string[]):Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!keys.includes(key)))return invalid();return value as Record<string,unknown>;}
@@ -53,7 +53,7 @@ export class IntakeStore {
   const prior=this.#request(value.requestId,hash);if(prior)return structuredClone(this.#required(prior.id,prior.revision));
   return this.#store.withTransaction(()=>{
    this.#current(binding);const replay=this.#request(value.requestId,hash);if(replay)return structuredClone(this.#required(replay.id,replay.revision));
-   const latest=this.latest();if(value.expectedRevision!==(latest?.revision??0))throw new StoreError('intake_conflict','委托摘要已有新版本，请读取当前版本后修订。',409);
+   const latest=this.latest();if(value.expectedRevision!==(latest?.revision??0))throw new StoreError('intake_conflict','委托摘要已有新版本，请读取当前版本后修订。',409);if(value.content.reusableExperiences.some(ref=>!this.#options.experienceExactCurrent(ref)))throw new StoreError('intake_experience_unavailable','委托摘要引用的经验版本缺失、过期或当前不可用。',409);
    const id=latest?.id??'intake',revision=(latest?.revision??0)+1,record:IntakeRevision={requestId:value.requestId,reason:value.reason,content:value.content,id,revision,createdAt:this.#now(),goalRevision:binding.goalRevision,epoch:binding.epoch,actor:{role:'main',generation:binding.generation},supersedes:latest?{id,revision:latest.revision}:null};
    this.#store.connection.prepare('INSERT INTO intake_summaries VALUES (?,?,?,?)').run(this.#delegationId,id,revision,JSON.stringify(record));this.#store.connection.prepare('INSERT INTO intake_requests VALUES (?,?,?,?,?)').run(this.#delegationId,value.requestId,hash,id,revision);return structuredClone(record);
   });
@@ -62,6 +62,7 @@ export class IntakeStore {
   this.#store.scope(this.#owner,this.#delegationId);const latest=this.latest();if(!latest)return{summary:null,pendingQuestions:[],status:'not_started'};
   const current=latest.goalRevision===binding.goalRevision&&latest.epoch===binding.epoch;
   if(!current)return{summary:{id:latest.id,revision:latest.revision,createdAt:latest.createdAt,goalRevision:latest.goalRevision,epoch:latest.epoch,qualification:'historical'},pendingQuestions:[],status:'recheck_required'};
+  if(latest.content.reusableExperiences.some(ref=>!this.#options.experienceExactCurrent(ref)))return{summary:{id:latest.id,revision:latest.revision,createdAt:latest.createdAt,goalRevision:latest.goalRevision,epoch:latest.epoch,qualification:'unavailable'},pendingQuestions:[],status:'recheck_required'};
   return{summary:{...structuredClone(latest),qualification:'current'},pendingQuestions:latest.content.questions.filter(question=>question.status==='pending'),status:'current'};
  }
 }

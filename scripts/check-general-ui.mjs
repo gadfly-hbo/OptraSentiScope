@@ -1,12 +1,13 @@
-import {execFile} from 'node:child_process';
+import {execFile,execFileSync} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdirSync,mkdtempSync,writeFileSync,readFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {SentiStore} from '../src/store.ts';
 import {startLocalHost} from '../src/server.ts';
 
-const exec=promisify(execFile),root=resolve('.local/general-ui-checks');mkdirSync(root,{recursive:true});
+const exec=promisify(execFile),project=resolve('.'),root=resolve('.local/general-ui-checks');mkdirSync(root,{recursive:true});
+const identity={node:process.version,gitHead:execFileSync('git',['-C',project,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),sourceDirty:execFileSync('git',['-C',project,'status','--porcelain'],{encoding:'utf8'}).trim().length>0,files:['package.json','src/server.ts','src/web/app.js','src/web/styles.css','scripts/check-general-ui.mjs'].map(path=>({path,sha256:createHash('sha256').update(readFileSync(resolve(project,path))).digest('hex')}))};
 const output=mkdtempSync(join(root,'run-')),session=`sentiscope-general-ui-${randomUUID()}`,commands=[];
 const store=new SentiStore({filename:':memory:'}),owner={enterpriseId:'general-ui-fixture',principalId:'operator'},delegation=store.create(owner,{goal:'一句话建立并补全摘要',idempotencyKey:'create'});
 let control={revision:0,researchPaused:false,collectionPaused:false,pausedScopes:[],updatedAt:new Date().toISOString()},preferences={timeZone:'UTC',time:'17:00:00',weekdays:[1,2,3,4,5],revision:1};
@@ -22,7 +23,7 @@ try{
  await browser('click','details:has(#preferences-form) > summary');await browser('fill','#preference-time','09:00');await browser('fill','#preference-timezone','UTC');await browser('check','input[name="weekdays"][value="6"]');await browser('click','#preferences-form button[type="submit"]');
  await browser('wait','--fn','document.querySelector("#screen").textContent.includes("周六")');
  await browser('set','viewport','390','844');await browser('wait','--fn','document.documentElement.scrollWidth<=innerWidth');await browser('screenshot',join(output,'mobile.png'));assertBrowser(await browser('errors'),'');
- writeFileSync(join(output,'result.json'),JSON.stringify({status:'PASS',commands,control,preferences,hostURL:host.url},null,2)+'\n');
+  writeFileSync(join(output,'result.json'),JSON.stringify({status:'PASS',identity,commands,control,preferences,hostURL:host.url},null,2)+'\n');
 }catch(cause){error={name:cause.name,message:cause.message};writeFileSync(join(output,'result.json'),JSON.stringify({status:'FAIL',error,commands,control,preferences},null,2)+'\n');}
 finally{await browser('close').catch(()=>{});await host.close();store.close();}
 const result=JSON.parse(readFileSync(join(output,'result.json'),'utf8'));console.log(`${result.status}: ${output}`);if(result.status!=='PASS')process.exitCode=1;

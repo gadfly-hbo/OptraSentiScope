@@ -45,3 +45,24 @@ test('declared A-to-B and B-to-plan support reaches only the scoped dependent pl
   assert.equal(review.reevaluations.length,1);assert.deepEqual(review.reevaluations[0].plan,reference('plan-c'));assert.ok(review.reevaluations[0].scope.includes('A mechanism supports B'));assert.ok(review.reevaluations[0].scope.includes('B mechanism supports C'));
  }finally{f.store.close();}
 });
+
+test('alternate explicit paths to the same plan retain independent dependency provenance',async()=>{
+ const f=fixture();try{
+  for(const id of ['judgment-root','judgment-a','judgment-b','judgment-c'])f.put(revision(id,'judgment'));
+  f.put(revision('plan-shared','plan'));
+  const edges=[
+   {requestId:'root-a',judgment:reference('judgment-root'),plan:reference('judgment-a'),scope:'Root A path',why:'Root supports A'},
+   {requestId:'a-b',judgment:reference('judgment-a'),plan:reference('judgment-b'),scope:'A B path',why:'A supports B'},
+   {requestId:'root-c',judgment:reference('judgment-root'),plan:reference('judgment-c'),scope:'Root C path',why:'Root supports C'},
+   {requestId:'c-b',judgment:reference('judgment-c'),plan:reference('judgment-b'),scope:'C B path',why:'C supports B'},
+   {requestId:'b-plan',judgment:reference('judgment-b'),plan:reference('plan-shared'),scope:'B supports plan',why:'B supports the shared plan'}
+  ] as const;
+  const saved:Record<string,string>={};for(const edge of edges){const relation=await f.cognition.saveSupport(f.binding,{...edge,reason:'Agent declared edge',status:'active'});saved[edge.requestId]=relation.id;}
+  const review=await f.cognition.review(f.binding,{requestId:'review-root',judgment:reference('judgment-root'),trigger:{kind:'source_event',eventId:'event-root',sourceId:'source',observedAt:'2026-11-18T02:00:00.000Z'},conclusion:'limited',summary:'Both paths changed',reason:'Both paths must remain explicit',changes:['Root changed'],limitations:[],unknowns:[],nextReview:{condition:'After both paths'}});
+  assert.equal(review.reevaluations.length,2,'Each simple explicit path to the same plan must remain a re-evaluation responsibility');
+  const paths=review.reevaluations.map(task=>task.relations??[task.relation]).map(path=>path.map(item=>item.id));
+  assert.deepEqual([...paths].sort(),[[saved['root-a'],saved['a-b'],saved['b-plan']],[saved['root-c'],saved['c-b'],saved['b-plan']]].sort());
+  assert.ok(review.reevaluations.some(task=>task.scope.includes('Root A path')&&task.scope.includes('A B path')));
+  assert.ok(review.reevaluations.some(task=>task.scope.includes('Root C path')&&task.scope.includes('C B path')));
+ }finally{f.store.close();}
+});

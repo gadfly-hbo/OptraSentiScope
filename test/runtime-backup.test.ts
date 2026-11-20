@@ -22,5 +22,11 @@ test('a closed runtime directory backs up consistently, verifies, restores, and 
   const reopened=new SentiStore({filename:join(restored,'business.sqlite')});try{
    const value=reopened.get(owner,delegation.id);assert.equal(value.goal,'Synthetic durable runtime');assert.equal(value.messages.at(-1)?.text,'exact business fact');
   }finally{reopened.close();}
+  const unlisted=join(root,'backup-unlisted');const unlistedManifest=await createRuntimeBackup(data,unlisted);writeFileSync(join(unlisted,'native','unlisted.json'),'unverified\n');
+  assert.equal((await verifyRuntimeBackup(unlisted)).status,'invalid');await assert.rejects(restoreRuntimeBackup(unlisted,join(root,'restore-unlisted')),{code:'runtime_backup_invalid'});
+  const corrupted=join(root,'backup-corrupted');await createRuntimeBackup(data,corrupted);writeFileSync(join(corrupted,'native','storage','schedule.json'),'tampered\n');
+  assert.equal((await verifyRuntimeBackup(corrupted)).status,'invalid');await assert.rejects(restoreRuntimeBackup(corrupted,join(root,'restore-corrupted')),{code:'runtime_backup_invalid'});
+  const escaped=join(root,'backup-escaped');const escapedManifest=await createRuntimeBackup(data,escaped);escapedManifest.files=[{...escapedManifest.files[0],path:'../../outside.txt'}];writeFileSync(join(escaped,'manifest.json'),JSON.stringify(escapedManifest,null,2)+'\n');
+  assert.equal((await verifyRuntimeBackup(escaped)).status,'invalid');await assert.rejects(restoreRuntimeBackup(escaped,join(root,'restore-escaped')),{code:'runtime_backup_invalid'});
  }finally{rmSync(root,{recursive:true,force:true});}
 });

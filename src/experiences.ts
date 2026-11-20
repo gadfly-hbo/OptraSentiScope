@@ -82,12 +82,13 @@ export class ExperienceStore {
    CREATE TABLE IF NOT EXISTS experience_uses(namespace TEXT NOT NULL,id TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(namespace,id));`);
  }
  #now(){return instant(this.#options.now?.()??new Date().toISOString());}
+ #requestNamespace(delegationId:string){return digest([this.#namespace,delegationId]);}
  #binding(value:RunBinding):RunBinding{
   if(value?.owner?.enterpriseId!==this.#owner.enterpriseId||value?.owner?.principalId!==this.#owner.principalId||value.delegationId===undefined||value.role!=='main'||!Number.isSafeInteger(value.goalRevision)||value.goalRevision<1||!Number.isSafeInteger(value.epoch)||value.epoch<0||!Number.isSafeInteger(value.generation)||value.generation<1)return invalid();
   return{owner:{...this.#owner},delegationId:value.delegationId,goalRevision:value.goalRevision,epoch:value.epoch,generation:value.generation,role:'main'};
  }
  #current(binding:RunBinding){const delegation=this.#store.scope(this.#owner,binding.delegationId);if(delegation.lifecycle!=='active'||this.#options.isCurrent(binding)!==true)throw new StoreError('experience_stale','经验的当前运行资格已失效。',409);}
- #request(kind:'experience'|'use',requestId:string,hash:string){const row=this.#store.connection.prepare('SELECT request_hash,record_id,version FROM experience_requests WHERE namespace=? AND request_id=?').get(this.#namespace,requestId) as{request_hash:string;record_id:string;version:number}|undefined;if(!row)return;if(row.request_hash!==hash)throw new StoreError('experience_conflict','同一经验请求不能改写内容。',409);return row;}
+ #request(kind:'experience'|'use',delegationId:string,requestId:string,hash:string){const row=this.#store.connection.prepare('SELECT request_hash,kind,record_id,version FROM experience_requests WHERE namespace=? AND request_id=?').get(this.#requestNamespace(delegationId),requestId) as{request_hash:string;kind:string;record_id:string;version:number}|undefined;if(!row)return;if(row.kind!==kind||row.request_hash!==hash)throw new StoreError('experience_conflict','同一经验请求不能改写内容。',409);return row;}
  #history():readonly ExperienceRevision[]{this.#store.scope(this.#owner,this.#delegationId);return this.#store.connection.prepare('SELECT value FROM experiences WHERE namespace=? ORDER BY rowid').all(this.#namespace).map(row=>JSON.parse(row.value as string) as ExperienceRevision);}
  latest():readonly ExperienceRevision[]{return[...new Map(this.#history().map(item=>[item.id,item])).values()];}
  #exact(ref:{id:string;version:number}):ExperienceRevision{const row=this.#store.connection.prepare('SELECT value FROM experiences WHERE namespace=? AND id=? AND version=?').get(this.#namespace,text(ref.id,500),integer(ref.version,1));if(!row)throw new StoreError('experience_not_found','未找到准确经验版本。',404);return JSON.parse(row.value as string) as ExperienceRevision;}
@@ -98,15 +99,15 @@ export class ExperienceStore {
  }
  meta(item:ExperienceRevision):ExperienceMeta{return{id:item.id,version:item.version,title:item.title,status:item.status,sourceDelegationId:item.sourceDelegationId,createdAt:item.createdAt,validUntil:item.validUntil,qualification:this.#qualification(item)};}
  async save(inputBinding:RunBinding,input:SaveExperience):Promise<ExperienceRevision>{
-  const binding=this.#binding(inputBinding),value=experienceInput(input),hash=digest({kind:'experience',value});
-  const prior=this.#request('experience',value.requestId,hash);if(prior)return structuredClone(this.#exact({id:prior.record_id,version:prior.version}));
+  const binding=this.#binding(inputBinding),value=experienceInput(input),hash=digest({kind:'experience',sourceDelegationId:binding.delegationId,goalRevision:binding.goalRevision,epoch:binding.epoch,value});
+  const prior=this.#request('experience',binding.delegationId,value.requestId,hash);if(prior)return structuredClone(this.#exact({id:prior.record_id,version:prior.version}));
   await this.#options.verifyEvidence(binding,value.evidence);if(value.counterexamples.length)await this.#options.verifyEvidence(binding,value.counterexamples);await this.#options.verifyBasis(binding,value.basis);
   return this.#store.withTransaction(()=>{
-   this.#current(binding);const replay=this.#request('experience',value.requestId,hash);if(replay)return structuredClone(this.#exact({id:replay.record_id,version:replay.version}));
+   this.#current(binding);const replay=this.#request('experience',binding.delegationId,value.requestId,hash);if(replay)return structuredClone(this.#exact({id:replay.record_id,version:replay.version}));
    const previous=value.id?this.latest().find(item=>item.id===value.id):undefined;if(value.expectedVersion!==(previous?.version??0)||(value.id&&!previous))throw new StoreError('experience_conflict','经验版本已变化，请读取当前版本后修订。',409);
    if(previous&&previous.sourceDelegationId!==binding.delegationId)throw new StoreError('experience_scope','经验修订必须由原来源委托完成。',403);
    const id=value.id??randomUUID(),now=this.#now(),record:ExperienceRevision={...value,id,version:(previous?.version??0)+1,requestId:value.requestId,sourceDelegationId:binding.delegationId,createdAt:now,goalRevision:binding.goalRevision,epoch:binding.epoch,binding,supersedes:previous?{id,version:previous.version}:null};
-   this.#store.connection.prepare('INSERT INTO experiences VALUES (?,?,?,?)').run(this.#namespace,id,record.version,JSON.stringify(record));this.#store.connection.prepare('INSERT INTO experience_requests VALUES (?,?,?,?,?,?)').run(this.#namespace,value.requestId,hash,'experience',id,record.version);return structuredClone(record);
+   this.#store.connection.prepare('INSERT INTO experiences VALUES (?,?,?,?)').run(this.#namespace,id,record.version,JSON.stringify(record));this.#store.connection.prepare('INSERT INTO experience_requests VALUES (?,?,?,?,?,?)').run(this.#requestNamespace(binding.delegationId),value.requestId,hash,'experience',id,record.version);return structuredClone(record);
   });
  }
  async read(inputBinding:RunBinding,ref:{id:string;version:number}):Promise<ExperienceRevision&{qualification:ExperienceMeta['qualification']}>{
@@ -114,14 +115,14 @@ export class ExperienceStore {
  }
  find():readonly ExperienceMeta[]{return this.latest().map(item=>this.meta(item));}
  async use(inputBinding:RunBinding,input:SaveExperienceUse):Promise<ExperienceUse>{
-  const binding=this.#binding(inputBinding),value=useInput(input),hash=digest({kind:'use',goalRevision:binding.goalRevision,epoch:binding.epoch,value});
-  const prior=this.#request('use',value.requestId,hash);if(prior)return structuredClone(JSON.parse(this.#store.connection.prepare('SELECT value FROM experience_uses WHERE namespace=? AND id=?').get(this.#namespace,prior.record_id)!.value as string) as ExperienceUse);
+  const binding=this.#binding(inputBinding),value=useInput(input),hash=digest({kind:'use',targetDelegationId:binding.delegationId,goalRevision:binding.goalRevision,epoch:binding.epoch,value});
+  const prior=this.#request('use',binding.delegationId,value.requestId,hash);if(prior)return structuredClone(JSON.parse(this.#store.connection.prepare('SELECT value FROM experience_uses WHERE namespace=? AND id=?').get(this.#namespace,prior.record_id)!.value as string) as ExperienceUse);
   const experience=await this.read(binding,value.experience);if(experience.status==='withdrawn')throw new StoreError('experience_withdrawn','已撤回经验不能作为适用支持。',409);if(experience.qualification!=='current')throw new StoreError('experience_not_applicable','经验过期或非当前版本，不能记录为适用支持。',409);
   if(value.artifact)await this.#options.verifyArtifact(binding,value.artifact);
   return this.#store.withTransaction(()=>{
-   this.#current(binding);const replay=this.#request('use',value.requestId,hash);if(replay)return structuredClone(JSON.parse(this.#store.connection.prepare('SELECT value FROM experience_uses WHERE namespace=? AND id=?').get(this.#namespace,replay.record_id)!.value as string) as ExperienceUse);
+   this.#current(binding);const replay=this.#request('use',binding.delegationId,value.requestId,hash);if(replay)return structuredClone(JSON.parse(this.#store.connection.prepare('SELECT value FROM experience_uses WHERE namespace=? AND id=?').get(this.#namespace,replay.record_id)!.value as string) as ExperienceUse);
    const id=digest([binding.delegationId,value.experience,value.requestId]),now=this.#now(),record:ExperienceUse={...value,id,targetDelegationId:binding.delegationId,experienceTitle:experience.title,createdAt:now,goalRevision:binding.goalRevision,epoch:binding.epoch,binding};
-   this.#store.connection.prepare('INSERT INTO experience_uses VALUES (?,?,?)').run(this.#namespace,id,JSON.stringify(record));this.#store.connection.prepare('INSERT INTO experience_requests VALUES (?,?,?,?,?,?)').run(this.#namespace,value.requestId,hash,'use',id,1);return structuredClone(record);
+   this.#store.connection.prepare('INSERT INTO experience_uses VALUES (?,?,?)').run(this.#namespace,id,JSON.stringify(record));this.#store.connection.prepare('INSERT INTO experience_requests VALUES (?,?,?,?,?,?)').run(this.#requestNamespace(binding.delegationId),value.requestId,hash,'use',id,1);return structuredClone(record);
   });
  }
  uses(delegationId:string):readonly ExperienceUse[]{this.#store.scope(this.#owner,delegationId);return this.#store.connection.prepare('SELECT value FROM experience_uses WHERE namespace=? ORDER BY rowid').all(this.#namespace).map(row=>JSON.parse(row.value as string) as ExperienceUse);}

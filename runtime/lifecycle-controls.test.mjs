@@ -44,6 +44,8 @@ test('lifecycle control request replay keeps its original receipt across later r
   controls=new LifecycleControlsStore(store,{owner,delegationId:delegation.id},()=>'2026-11-19T09:00:00.000Z');
   assert.deepEqual(controls.pauseResearch({expectedRevision:0,mode:'all',reason:'Wait for input',idempotencyKey:'pause'}),pause);
   assert.equal(controls.status().revision,resume.revision);
+  const scoped=new LifecycleControlsStore(store,{owner,delegationId:store.create(owner,{goal:'Exact scope',idempotencyKey:'scoped'}).id});
+  scoped.pauseResearch({expectedRevision:0,mode:'direction',scope:'P2',reason:'Exact direction',idempotencyKey:'pause-exact'});assert.equal(scoped.blocksScope('P2'),true);assert.equal(scoped.blocksScope('P2 extended'),false);assert.equal(scoped.blocksScope('wholesale'),false);
  }finally{store.close();rmSync(directory,{recursive:true,force:true});}
 });
 

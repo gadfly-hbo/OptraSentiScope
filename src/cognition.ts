@@ -126,17 +126,17 @@ export class CognitionStore {
  #reachablePlans(binding:RunBinding,root:ArtifactReference){
   const relations=this.latestSupports().filter(relation=>relation.status==='active'&&relation.goalRevision===binding.goalRevision);
   const bySource=new Map<string,SupportRelation[]>();for(const relation of relations){const list=bySource.get(relation.judgment.artifactId)??[];list.push(relation);bySource.set(relation.judgment.artifactId,list);}
-  const terminal=new Map<string,{relation:SupportRelation;relations:SupportRelation[];scope:string;why:string;judgment:ArtifactReference}>();
+  const terminal:{relation:SupportRelation;relations:SupportRelation[];scope:string;why:string;judgment:ArtifactReference}[]=[],seenPaths=new Set<string>(),pathKey=(path:SupportRelation[])=>JSON.stringify(path.map(item=>[item.id,item.revision]));
   const visit=(source:ArtifactReference,path:SupportRelation[],seenSources:Set<string>,seenRelations:Set<string>)=>{
-   if(seenSources.has(source.artifactId)||path.length>50)return;seenSources.add(source.artifactId);
+   if(seenSources.has(source.artifactId)||path.length>50)return;const branchSources=new Set([...seenSources,source.artifactId]);
    for(const relation of bySource.get(source.artifactId)??[]){
     if(seenRelations.has(`${relation.id}:${relation.revision}`)||!this.#options.isLatestPlan(relation.plan,binding.goalRevision))continue;
-    const nextPath=[...path,relation],scope=path.length?`${path.map(item=>item.scope).join('；')}；${relation.scope}`:relation.scope,why=path.length?`${path.map(item=>item.why).join('；')}；${relation.why}`:relation.why;
-    if(this.#options.artifactKind(relation.plan)==='plan'){const key=JSON.stringify(relation.plan);if(!terminal.has(key))terminal.set(key,{relation,relations:nextPath,scope,why,judgment:root});continue;}
-    if(this.#options.artifactKind(relation.plan)==='judgment')visit(relation.plan,nextPath,new Set(seenSources),new Set([...seenRelations,`${relation.id}:${relation.revision}`]));
+    const nextPath=[...path,relation],scope=nextPath.map(item=>item.scope).join('；'),why=nextPath.map(item=>item.why).join('；'),nextRelations=new Set([...seenRelations,`${relation.id}:${relation.revision}`]);
+    if(this.#options.artifactKind(relation.plan)==='plan'){const key=pathKey(nextPath);if(seenPaths.has(key))continue;if(terminal.length>=1000)throw new StoreError('cognition_graph_too_large','显式依赖路径超出安全上限。',409);seenPaths.add(key);terminal.push({relation,relations:nextPath,scope,why,judgment:root});continue;}
+    if(this.#options.artifactKind(relation.plan)==='judgment')visit(relation.plan,nextPath,branchSources,nextRelations);
    }
   };
-  visit(root,[],new Set(),new Set());return[...terminal.values()];
+  visit(root,[],new Set(),new Set());return terminal;
  }
  #supportForAdjustedPlan(binding:RunBinding,previous:SupportRelation,plan:ArtifactReference,reason:string,requestId:string):SupportRelation{
   const input:SaveSupportRelation={requestId:requestId.slice(0,500),judgment:previous.judgment,plan,scope:previous.scope,why:previous.why,reason,status:'active'};const hash=this.#supportHash(binding,input);
@@ -177,7 +177,7 @@ export class CognitionStore {
    const duplicate=this.reviews().find(r=>digest({trigger:r.trigger,judgment:r.judgment,goalRevision:r.goalRevision,epoch:r.epoch})===digest({trigger:value.trigger,judgment:value.judgment,goalRevision:binding.goalRevision,epoch:binding.epoch}));
    if(duplicate)return{...duplicate,reevaluations:this.reevaluations().filter(r=>r.reviewId===duplicate.id)};
    const id=randomUUID(),now=this.#now();const reachable=value.conclusion==='maintained'||value.conclusion==='unknown'?[]:this.#reachablePlans(binding,value.judgment);
-   const tasks=reachable.map(({relation,relations,scope,why,judgment})=>({id:digest([id,relation.id]),reviewId:id,relation:{id:relation.id,revision:relation.revision},...(relations.length>1?{relations:relations.map(item=>({id:item.id,revision:item.revision}))}:{}),judgment,plan:relation.plan,scope,why,binding,createdAt:now,updatedAt:now,status:'pending' as const}));
+   const tasks=reachable.map(({relation,relations,scope,why,judgment})=>({id:digest([id,...relations.map(item=>[item.id,item.revision])]),reviewId:id,relation:{id:relation.id,revision:relation.revision},...(relations.length>1?{relations:relations.map(item=>({id:item.id,revision:item.revision}))}:{}),judgment,plan:relation.plan,scope,why,binding,createdAt:now,updatedAt:now,status:'pending' as const}));
    const record:CognitionReview={...value,id,createdAt:now,goalRevision:binding.goalRevision,epoch:binding.epoch,binding,reevaluationIds:tasks.map(t=>t.id)};
    this.#store.connection.prepare('INSERT INTO cognition_reviews VALUES (?,?,?)').run(this.#namespace,id,JSON.stringify(record));
    this.#store.connection.prepare('INSERT INTO cognition_requests VALUES (?,?,?,?,?,?)').run(this.#namespace,value.requestId,hash,'review',id,1);

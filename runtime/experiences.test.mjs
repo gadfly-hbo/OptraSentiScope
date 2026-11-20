@@ -65,3 +65,23 @@ test('two same-enterprise delegations form, discover, apply, revise, and reasses
   }finally{await foreignCoordinator.close();}
  }finally{await f.close();}
 });
+
+test('experience request receipts are scoped to their source or target delegation',async()=>{
+ const f=await boot();try{
+  const source=(await f.invoke(f.first.id,'research_context',{})).references.at(-1);assert.ok(source);
+  const firstJudgment=await f.invoke(f.first.id,'publish_artifact',{expectedVersion:0,requestId:'origin-judgment',reason:'Origin judgment',content:judgmentContent('J1',{ref:source.ref,hash:source.hash})});
+  const firstExperience=await f.invoke(f.first.id,'publish_experience',{requestId:'same-request',title:'First delegation experience',summary:'First exact condition',evidence:[{ref:source.ref,hash:source.hash}],basis:[{kind:'judgment',artifact:{artifactId:firstJudgment.artifactId,version:1}}],businessConditions:['First condition'],validUntil:'2099-01-01T00:00:00.000Z',limitations:[],counterexamples:[],unknowns:[],revalidateWhen:{condition:'Never'},status:'active',reason:'First exact basis'});
+  const targetSource=(await f.invoke(f.second.id,'research_context',{})).references.find(item=>item.hash===source.hash);assert.ok(targetSource);
+  const secondJudgment=await f.invoke(f.second.id,'publish_artifact',{expectedVersion:0,requestId:'origin-judgment',reason:'Independent target judgment',content:judgmentContent('J2',{ref:targetSource.ref,hash:targetSource.hash})});
+  const secondExperience=await f.invoke(f.second.id,'publish_experience',{requestId:'same-request',title:'Second delegation experience',summary:'Second exact condition',evidence:[{ref:targetSource.ref,hash:targetSource.hash}],basis:[{kind:'judgment',artifact:{artifactId:secondJudgment.artifactId,version:1}}],businessConditions:['Second condition'],validUntil:'2099-01-01T00:00:00.000Z',limitations:[],counterexamples:[],unknowns:[],revalidateWhen:{condition:'Never'},status:'active',reason:'Second exact basis'});
+  assert.notEqual(secondExperience.id,firstExperience.id);assert.equal(firstExperience.sourceDelegationId,f.first.id);assert.equal(secondExperience.sourceDelegationId,f.second.id);
+  const firstUse=await f.invoke(f.first.id,'record_experience_use',{requestId:'same-use',experience:{id:firstExperience.id,version:1},decision:'applied',reason:'First scope applies',influence:'First record',artifact:{artifactId:firstJudgment.artifactId,version:1}});
+  const secondUse=await f.invoke(f.second.id,'record_experience_use',{requestId:'same-use',experience:{id:secondExperience.id,version:1},decision:'not_applied',reason:'Second scope differs',influence:'Second record'});
+  assert.equal(firstUse.targetDelegationId,f.first.id);assert.equal(secondUse.targetDelegationId,f.second.id);assert.notEqual(firstUse.id,secondUse.id);
+  const intakeContent={objective:'Use exact experience only',facts:['Synthetic source is authorized'],assumptions:['Synthetic scope'],reusableExperiences:[{id:firstExperience.id,version:1,applicable:true,reason:'The exact condition matches'}],researchAuthorization:['Read the authorized synthetic source'],businessBoundary:['No business action'],evaluation:['No business effect claim'],followUp:['Recheck after source changes'],unknowns:['Business quality unknown'],questions:[]};
+  await f.invoke(f.second.id,'save_intake_summary',{requestId:'intake',expectedRevision:0,reason:'Use exact experience',content:intakeContent});
+  await assert.rejects(f.invoke(f.second.id,'save_intake_summary',{requestId:'intake-missing',expectedRevision:1,reason:'Reference a missing experience',content:{...intakeContent,reusableExperiences:[{id:'missing-experience',version:1,applicable:false,reason:'Missing reference'}]}}),{code:'intake_experience_unavailable'});
+  f.coordinator.configureSources(f.first.id,[]);await f.coordinator.sync(f.first.id);const intakeProjection=f.coordinator.detail(f.second.id).intake;
+  assert.equal(intakeProjection.status,'recheck_required');assert.equal(intakeProjection.summary.qualification,'unavailable');assert.equal('content'in intakeProjection.summary,false);
+ }finally{await f.close();}
+});
