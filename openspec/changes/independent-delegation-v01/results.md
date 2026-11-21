@@ -67,6 +67,14 @@
 - 材料修订：run-record 已拆成 F1/C2 两个独立批次对象，各自保留释放、耗时、配置、token、费用和输出身份；ledger 明确 NEW-02 只做不受影响复看，反证批不创建访客建议依赖重评。已重冻 12 文件 manifest 并验证全部 JSON，随后完成 R2 独立复验。
 - 非作者复验 R2：`.local/independent/independent-delegation-materials-r2/REPORT.md` **PASS**，M-01/L-01 均 RESOLVED，无剩余发现；12 文件 bytes/SHA-256、文件集合、JSON 与重复键检查通过，16 个评阅项全部 NOT_RUN。结论仅表示材料就绪，不代表真实模型质量或完整 AC07。
 
+## Git、CI 与本机切换回执
+
+- 工作分支 `qoder/independent-delegation` 提交 `d687a7d14d46ff1d23a84f4b31870cc14962f20b`；集中 PR #11 https://github.com/gadfly-hbo/OptraSentiScope/pull/11 。实际 head CI run `44918373092` PASS（check 6m3s），随后 squash 合并提交 `9070adad06532727e2356a4e6e6840d7764c7906`（2026-11-21T15:23:57Z）。合并后 main CI run `44918974429` PASS（check 5m46s），本地 `main` 已安全快进。
+- 切换前备份：`.local/service-trial-backup-20261121-153048/`。`createRuntimeBackup` 产物 90 个文件校验 `ok`，同时保留原 `host.json`、launchd plist、旧 proof、私有凭据、runtime、合成来源目录和 `switch-context.json`；恢复工作树 `.local/service-trial-recovery-44760bd` 固定旧运行提交 `44760bd`。
+- 切换配置仅在私有 `host.json` 增加默认来源范围 `goalIncludes:"合成来源"`；原静态 grant、owner、数据目录和 auth 不变。目标服务 `127.0.0.1:8766` 现运行合并版 `9070ada`，健康 ok、runtime configured、Call not_connected、syntheticTrial true；证明 `.local/service-trial-20261120/service-proof.json`。
+- 原实例演练首轮 FAIL 为脚本等待进展页旁栏文案，而资料页实际显示“当前没有已接通的资料来源”；现场 `.local/service-trial-20261120/independent-Hnv4iv/` 保留。修正后 `.local/service-trial-20261120/independent-SQqQ8B/result.json` PASS：委托 `3455ca61-07d9-4250-93ad-40778ff24afa` 一句话自动获源并展示准确 v1 证据；不匹配委托 `14a1210a-3acc-4d8b-bb64-e1e269576bc8` 零来源；暂停期间 v2 不派发、恢复自动补读；工作台重开与实际服务重启读回 v2；策略前旧委托仍零来源，旧静态 grant 保持 ready；390px 无溢出、无浏览器 page error。
+- 经营者本人产品体验验收仍待用户确认；工程切换、演练和回执不替代该验收。
+
 ## 当前验收状态
 
 | 项目 | 状态 | 证据 / 下一步 |
@@ -79,4 +87,5 @@
 | 真实模型运行与评分 | NOT_RUN | 本轮明确禁止，不因合成 Provider 结果改变 |
 | 完整检查 | PASS | 最新 331/331、runtime preparation、公开 SDK 边界与 15 条链全部通过 |
 | 独立复核 | PASS | 最终 R2 无剩余发现，四原则专项通过；B 材料 R2 PASS |
-| Git/PR/CI/合并/服务切换 | NOT_RUN | 用户已授权，最终复核通过后执行并分别报告 |
+| Git/PR/CI/合并/服务切换 | PASS | PR #11 两次 CI PASS 后合并；备份、恢复点、实际运行版本与原实例演练均留证 |
+| 用户产品体验验收 | PENDING | 经营者按上述入口亲自确认；工程证据不替代体验结论 |
