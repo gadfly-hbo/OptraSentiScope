@@ -5,7 +5,7 @@
 ## 基线事实
 
 - Git：`main`/`origin/main` 为 `32b4e00450d069cd254fb33fe0710cf3f0925b86`，已建立 `qoder/p03-p05-sustained-sources`。
-- 基线检查：`npm test` 295/295 与 `npm run typecheck` PASS；R2/R3 修复与 R02 实施后当前完整单测为 315/315 PASS，类型检查 PASS。
+- 基线检查：`npm test` 295/295 与 `npm run typecheck` PASS；R2/R3 修复与 R02 实施后当前完整单测为 316/316 PASS，类型检查 PASS。
 - 试用服务：开工时 `127.0.0.1:8766` 无监听，未发现匹配产品进程；`.local/service-trial-20261120/host.json` 指定 owner `local-trial/local-operator` 和独立数据目录。旧 `service-proof.json` 只证明 2026-11-20 的 `6ec330d` 运行，不代表当前状态。
 - 官方组件：保持 Harness `0.2.2-rc.3` 与 superagent `8c32a9dc5d72c033816c6a8110b37f40cf94fba4`，未升级或改包。`npm run check:sdk` PASS：`.local/sdk-checks/run-1795231934530-3e53e2b1-3528-4ba4-ba58-eda867c8e7c5/result.json`。
 
@@ -20,7 +20,7 @@
 | P04 U01–U12 浏览器 | PASS（工程 UI 范围，待用户产品体验） | 见下方 U 矩阵；真实外部浏览器、HTTP 与 SQLite，窄屏/键盘/断连分别留证 |
 | P05 owner/凭据/出口/计算 OFF/SDK | PASS（本机合成边界；生产项 NOT_RUN） | `.local/host-controls-checks/run-1795245935638-260f0873-e4ba-4576-a205-3d34c06f8929/runner-result.json`；含实际官方 Engine worker 的 `run_compute` 拒绝。R02 本机登录/角色见 `test/server-auth.test.ts` 与 `.local/auth-ui-checks/run-8TpADq` |
 | P05 跨版本恢复与长流 | PASS（本机隔离范围） | 崩溃后备份恢复 `.local/recovery-checks/run-1795231389680-d4fbd51a-734f-4aae-bccf-f70002e4486c/result.json`；长流 `.local/longstream-checks/run-1795231877280/runner-result.json` |
-| 完整检查与审计 | PASS（最终候选前） | `npm run check` 全部通过，持久日志 `.local/p03-p05-candidate/full-check-r4.log`；315/315 tests；`npm audit --audit-level=high` PASS，0 vulnerabilities；真实浏览器 U01–U12、登录与撤权路径分别 PASS |
+| 完整检查与审计 | PASS（最终候选前） | `npm run check` 全部通过，持久日志 `.local/p03-p05-candidate/full-check-r5.log`；316/316 tests；`npm audit --audit-level=high` PASS，0 vulnerabilities；真实浏览器 U01–U12、登录与撤权路径分别 PASS |
 | 独立复核与四原则最终检查 | NOT_RUN | 固定候选后由全新上下文非作者执行 |
 | PR、两次 CI、合并与试用切换 | NOT_RUN | 已获本轮授权，独立复核后执行 |
 
@@ -49,7 +49,7 @@
 | U06 结果事实 | PASS | `.local/outcome-ui-checks/run-1S2AuF`：选择/执行/观察分离、UNKNOWN、缺资料与撤回。 |
 | U07 学习与反证 | PASS（工程展示，不证明业务学习质量） | `.local/effect-ui-checks/run-n0xNP5`：反证、认识修正、效果判断、经验限制和撤回。 |
 | U08 调整／暂停／恢复／结束 | PASS | `.local/lifecycle-ui-checks/run-hpjGr4`＋官方链：暂停/恢复摘要、原生定时结束、迟到不复活。 |
-| U09 来源失联／撤回 | PASS（R2 修复后，待独立重验） | 官方链失联/恢复/单方撤权；`.local/revocation-ui-checks/run-Lpcxwu` 证明进展/方案/资料页均不渲染失权 marker，390px 与浏览器错误检查通过。 |
+| U09 来源失联／撤回 | PASS（R2 修复后，待独立重验） | 官方链失联/恢复/单方撤权；`.local/revocation-ui-checks/run-JUbaxN` 证明进展/方案/资料页均不渲染失权 marker，390px 与浏览器错误检查通过。 |
 | U10 故障／UNKNOWN | PASS | 生命周期 UI 的 UNKNOWN 与断连最后可核实状态；官方恢复链保留 claimed/unknown。 |
 | U11 Call 未接通 | PASS | 工作台持续显示待接入；无 Call 数据或替身接入宣称。 |
 | U12 演示／运行边界 | PASS | 生命周期 UI 显示合成证据、计算 OFF、外部研究/提醒/导出/遥测/备份出口未启用；生产隔离仍 NOT_RUN。 |
@@ -88,6 +88,12 @@
 - Standards R4：`.local/independent/p03-p05-standards-r4/REPORT.md` PASS，R2/R3 与 R02 全部关闭，无新阻断。
 - Spec R4：`.local/independent/p03-p05-spec-r4/REPORT.md` PASS_WITH_FINDINGS；F-R4-01 为零证据派生正文撤权后投影 fail-open，F-R4-02 为长流数值标注错配。
 - 修复：历史派生正文只有在当前资格或存在可回放准确证据引用时返回；空证据历史记录默认遮蔽。新增 `runtime/revocation-projection.test.mjs` 零证据反例，先复现 FAIL 后转 GREEN。F-R4-02 已按所引 run 更正为 storage 9992 bytes/event、总 R² 0.9999932。
+
+## 独立复核 R5 与修复
+
+- Standards R5：`.local/independent/p03-p05-standards-r5/REPORT.md` PASS，R4 修复无权限/并发/持久化回归。
+- Spec R5：`.local/independent/p03-p05-spec-r5/REPORT.md` 确认 F-R4-01/02 RESOLVED，但发现遮蔽 followup 依据后 `app.js` 少一层可选链导致默认进展页崩溃，以及测试计数标注滞后。
+- 修复：`version?.content?.title`；撤权浏览器反例扩展为零证据＋followup，零证据单元反例也加入 followup；计数更正为 316/316。待定向重验。
 
 ## 本轮 RED、修复与 fixture 失败留痕
 
