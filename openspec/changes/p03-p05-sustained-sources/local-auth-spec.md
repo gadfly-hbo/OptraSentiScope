@@ -39,7 +39,7 @@
 - [x] token 不明文出现在 SQLite、原生会话、HTTP、控制台、日志或备份 manifest；cookie 不可被 JS 读取。
 - [x] logout 后原会话 401；过期/撤销/篡改 cookie 均失败；登录有限流。
 - [x] 真实浏览器验证登录/退出、键盘、错误状态、390px、operator/maintainer 分权；既有 U01–U12 回归。
-- [ ] 旧服务数据不变；试用切换时在私有 Host 配置角色 hash，向用户单独交付本机 token 位置。
+- [x] 旧服务数据不变；试用切换时在私有 Host 配置角色 hash，向用户单独交付本机 token 位置。切换备份 `.local/service-trial-backup-20261121-190436/`；角色 hash 写入私有 `host.json.auth`，原 token 仅存 `.local/service-trial-20261120/credentials.txt`（mode 600）；owner/数据目录不变，旧数据保留。
 
 ## Demo 边界
 

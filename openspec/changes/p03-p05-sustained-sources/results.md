@@ -1,6 +1,6 @@
 # P03–P05 结果记录
 
-2026-11-21 开工。当前候选已通过最终非作者 Spec／Standards 独立复核（R6 PASS），R2–R5 发现全部关闭；R02 修正版 UI Demo 获用户确认后已实施本机登录/角色。尚未完成 PR/CI、合并或试用切换。历史 PASS 只按原范围引用，不代替本候选证据。
+2026-11-21 开工并完成本轮交付。P03–P05 合成工程范围经多轮非作者独立复核（R6 PASS，R2–R5 发现全部关闭）；R02 修正版 UI Demo 获用户确认后实施本机登录/角色。后续补充默认关闭的 `syntheticTrial` 本机合成试用模式与首次落盘前重启锁死修复（独立复核 R1/R2，F1 经真实锁死现场回放确认 RESOLVED）。已交付 PR #4/#5/#6/#7/#8、各自 CI 与 main CI、squash 合并，并切换本机 `127.0.0.1:8766` 独立试用实例至 main `44760bd9bb4a2295a53894ee1fe06246309fa478`，完成用户入口演练。历史 PASS 只按原范围引用，不代替本候选证据。产品体验验收仍待用户确认；真实模型/企业资料/Call/生产项继续 NOT_RUN。
 
 ## 基线事实
 
@@ -22,7 +22,7 @@
 | P05 跨版本恢复与长流 | PASS（本机隔离范围） | 崩溃后备份恢复 `.local/recovery-checks/run-1795231389680-d4fbd51a-734f-4aae-bccf-f70002e4486c/result.json`；长流 `.local/longstream-checks/run-1795231877280/runner-result.json` |
 | 完整检查与审计 | PASS（最终候选前） | `npm run check` 全部通过，持久日志 `.local/p03-p05-candidate/full-check-r5.log`；316/316 tests；`npm audit --audit-level=high` PASS，0 vulnerabilities；真实浏览器 U01–U12、登录与撤权路径分别 PASS |
 | 独立复核与四原则最终检查 | PASS | R6 Spec／Standards 均 PASS：`.local/independent/p03-p05-spec-r6/REPORT.md`、`.local/independent/p03-p05-standards-r6/REPORT.md`；R2–R5 发现全部关闭 |
-| PR、两次 CI、合并与试用切换 | NOT_RUN | 已获本轮授权，独立复核后执行 |
+| PR、两次 CI、合并与试用切换 | PASS | PR #4（阶段交付）/#5（长流诊断）/#6（syntheticTrial＋重启修复）/#7（长流取样＋移动网格）/#8（长引用移动溢出）均 CI PASS 后 squash 合并；main CI 最终 PASS（run 44900522411，head `44760bd`）。试用实例切换至 `44760bd`，proof `.local/service-trial-20261120/service-proof.json`，演练 `.local/service-trial-20261120/drill-t2FxWw/result.json` PASS |
 
 ## AC 结果（本阶段合成工程范围）
 
@@ -117,7 +117,35 @@
 - 官方 SDK 版本和原实现不变，无深导、补丁或 monkey patch；共享快照按物理采集键复用且逐委托重核根与授权。
 - 正常用户仍只表达目标、补关键事实和使用既有生命周期控件；新增摘要为只读渐进披露，无新增机器配置、读取审批或确认步骤。
 
-完整 `npm run check` 已通过；独立复核、PR/CI、合并和实际试用服务结果仍待写入，本节不替代这些交付门禁。
+完整 `npm run check` 已通过（最终 321/321 tests、17 条官方/工程链 PASS、`npm audit --audit-level=high` 0 vulnerabilities）；独立复核、PR/CI、合并和实际试用服务结果见下方回执。产品体验验收仍待用户确认。
+
+## syntheticTrial 与重启修复独立复核（R1/R2）
+
+- 背景：合并版 `b831227` 后为完成派单授权的本机合成演练，补充默认关闭的 `syntheticTrial` Host 开关（固定 in-process `sentiscope-synthetic-trial/synthetic` adapter，仍强制本机 auth，不开外部传输/计算），并修复既有首次落盘前重启锁死。契约见 [spec.md](spec.md) “本机合成试用模式（syntheticTrial）契约”。
+- R1：`.local/independent/p03-p05-synthetic-r1/REPORT.md` PASS_WITH_FINDINGS。F1 HIGH（既有锁死）、F2 MEDIUM（SDD 记录）、F3–F6 LOW、F7–F10 INFO。
+- 修复：`src/research.ts` `start()` 按委托隔离启动对账；`#openEnsure`/`#retireRecorded` 对 `SessionPersistenceNotFoundError` 且无原生 Schedule 的运行标记 retired 并新建/收束，有 Schedule 或其他错误仍 fail-closed 隔离。永久回归 `runtime/restart-missing-session.test.mjs`（3 例，含 R1 真实现场：缺失会话＋心跳 Schedule 保持隔离不盲新建）、`scripts/runtime/start-config.test.mjs`（start.mjs 解析负例）。`check:synthetic-trial` 增永久负例（非固定模型拒绝、无 auth 拒绝）并改恢复后自动对账（去显式 sync）。
+- R2：`.local/independent/p03-p05-synthetic-r2/REPORT.md` PASS_WITH_FINDINGS。F1 经 R1 保留的真实锁死现场在候选代码下回放确认 RESOLVED（宿主成功启动、委托 fail-closed 隔离、二次启动正常）；F2–F6 已处理；残留 F-R2-01（回归强度，已补强第 3 例）、F-R2-02/03（措辞/results，已更新）、F6（start.mjs 路径，已补 start-config 测试）。四原则通过，IN01–IN05 通过。
+- 最终本地完整检查：`.local/p03-p05-candidate/full-check-css-r2.log`（321/321、17 PASS）。
+
+## 本轮 Git/CI/合并与试用切换回执
+
+- 阶段 PR #4 https://github.com/gadfly-hbo/OptraSentiScope/pull/4 ：最终 head `b0280ca4b6b02443548af8aba67d664859096338`，CI run 44887593477 PASS，squash merge `07233aa1eaef9bea82686ec8299f20a22252e2cb`。main 首轮 CI run 44888080631 长流 FAIL（同代码 PR CI PASS）。
+- 诊断 PR #5 https://github.com/gadfly-hbo/OptraSentiScope/pull/5 ：head `f289bdf`，CI run 44888476819 PASS，merge `b831227a0412bd797713041ce7947a3ff9df0b41`；main CI run 44888928949 PASS。
+- syntheticTrial PR #6 https://github.com/gadfly-hbo/OptraSentiScope/pull/6 ：head `1ccaf2354f07531113632b550daaf1387d10725f`，CI run 44897285147 PASS，merge `8052d2a57a3fb1fc3e74247fff0acd32466d3477`。main CI run 44897792529 长流首批计量 FAIL（CI 慢时序把引导写算进首批）。
+- 长流取样＋移动网格 PR #7 https://github.com/gadfly-hbo/OptraSentiScope/pull/7 ：head `7d8386aeb9e7e6e3152cf46ac0fd03d8d49ecc21`，CI PASS，merge `f5fffdfec71b11a6a1e51c889449b1d74a4074a9`；main CI run 44899209116 PASS（长流取样稳定修复在 CI 生效）。
+- 长引用移动溢出 PR #8 https://github.com/gadfly-hbo/OptraSentiScope/pull/8 ：head `d221b9f9f30755ce1c3b6452e0b25799a86889be`，CI PASS，merge `44760bd9bb4a2295a53894ee1fe06246309fa478`；main CI run 44900522411 PASS。
+- 长流根因修复：`scripts/runtime/longstream-probe.mjs` 取样前等待异步 storage 写落盘稳定（`settleStorage`），避免一次性引导写被误算进首批；本地每事件 storage 恒定 9992 bytes（批次 1/2/4/8），storage R² 0.99999996。非盲重跑。
+- 移动溢出根因修复：`src/web/styles.css` 移动 `detail-grid` 与内层 `main-column/side-column` 用 `minmax(0,1fr)`＋子项 `min-width:0`，body 继承 `overflow-wrap:anywhere`，长事实/会话标识不再撑宽页面；390px 页宽 390/390。
+
+### 试用实例切换
+
+- 目标：`127.0.0.1:8766`，launchd `gui/501/dev.optrasentiscope.trial`，配置/数据 `.local/service-trial-20261120/`。切换前实例未加载、无监听；旧 proof 仅证明 2026-11-20 `6ec330d` 未配置态。
+- 备份：`.local/service-trial-backup-20261121-190436/`（旧 data＋host.json＋plist＋旧 proof）。回退条件：若新版本健康/登录/读回失败，bootout 新 job，恢复备份 host.json（无 auth/syntheticTrial）与数据，bootstrap 旧 plist 回到 `6ec330d` 未配置态。
+- 配置：私有 `host.json` 增 `syntheticTrial:true` 与 operator/maintainer token SHA256（会话 86400s），owner 仍 `local-trial/local-operator`，数据目录不变；原 token 仅存 `.local/service-trial-20261120/credentials.txt`（mode 600，不进公开仓库/日志）。合成来源目录 `/Users/huangbo/.local/share/optrasentiscope-synthetic-source`（仓库外，仅合成事实）。
+- 运行版本：`44760bd9bb4a2295a53894ee1fe06246309fa478`；`/api/health` status ok、runtime configured、call not_connected；监听 node pid 见 proof；资产 hash 见 proof。
+- 分权核实：匿名业务 401；operator 登录 200；maintainer 业务 403、维护 200。
+- 用户入口演练（真实浏览器 agent-browser，`.local/service-trial-20261120/drill-t2FxWw/result.json` PASS）：operator UI 登录→UI 新建委托→Host 绑定合成 grant 并重开→来源 v1 报告渲染→UI 暂停按钮阻断派发→UI 恢复按钮自动补读 v2→服务重启后 v2 持久读回→390px 无横向溢出→无浏览器错误。截图 01–06 存于该目录。
+- 边界：合成来源/合成 Provider/计算 OFF/Call not_connected；不表述为真实模型质量、真实企业资料或生产安全验收。默认合成预算 1 小时到期或 maxTokens>1e6 会停摆（短演练设计）；官方 harness 插件激活失败可能 exit 0 并打印 warning，运维须读输出。
 
 ## 范围外 / NOT_RUN / UNKNOWN
 
