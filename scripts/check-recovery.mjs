@@ -103,4 +103,5 @@ finally {
   save(resolve(root, 'result.json'), result);
 }
 console.log(`${result.status}: ${root}/result.json`);
+if (result.status !== 'PASS') console.error(JSON.stringify({ error: result.error, phases: result.phases }, null, 2));
 process.exitCode = result.status === 'PASS' ? 0 : 1;
