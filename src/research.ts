@@ -8,7 +8,7 @@ import type {SentiStore} from './store.ts';
 import type {LifecycleControlPort} from './control.ts';
 import {EngineStore} from './engine-store.ts';
 import {SourceStore} from './sources.ts';
-import type {SourceGrant, SourceEvent} from './sources.ts';
+import type {SourceGrant, SourceEvent, SourceDefaultPolicy} from './sources.ts';
 import {ArtifactStore} from './artifacts.ts';
 import type {ArtifactEvidence, SaveArtifact, EffectAssessment} from './artifacts.ts';
 import {FollowupStore} from './followup.ts';
@@ -37,6 +37,7 @@ export interface ResearchOptions {
   model?:NativeOpenOptions['model'];intervalSeconds?:number;
   controls?:HostControls;
   grants?:Readonly<Record<string,readonly SourceGrant[]>>;protectedDirectories?:readonly string[];
+  sourceDefaults?:SourceDefaultPolicy;runtimeReady?:()=>boolean;
   notificationDefaults?:BriefPreferences;
 }
 interface Unit {engine:Engine;db:EngineStore;sources:SourceStore;artifacts:ArtifactStore;followups:FollowupStore;decisions:DecisionStore;notifications:NotificationStore;notificationSchedules:NotificationSchedules;outcomes:OutcomeStore;cognition:CognitionStore;experiences:ExperienceStore;intake:IntakeStore;lifecycleControls:LifecycleControlsStore;lifecycleSummaries:LifecycleSummaryStore;}
@@ -60,6 +61,11 @@ export class ResearchCoordinator {
   #closing=false;
   readonly status:{status:string;message:string};
   readonly controlPort:LifecycleControlPort;
+  #runtimeReady():boolean {return Boolean(this.#o.model)&&(this.#o.runtimeReady?.()??true);}
+  #refreshStatus():void {
+    const state=!this.#o.model?{status:'unconfigured',message:'研究环境尚未就绪；委托和历史已保存，尚未派发研究。'}:this.#runtimeReady()?{status:'configured',message:'持续研究环境已接通；进展和判断以已保存工单及报告为准。'}:{status:'unavailable',message:'运行插件未就绪；委托和已有成果保留，后续研究未派发。请由 Host 管理员恢复插件并重新核对。'};
+    this.status.status=state.status;this.status.message=state.message;
+  }
   constructor(input:ResearchOptions) {
     this.#o={...input,owner:Object.freeze({...input.owner})};
     if(input.intervalSeconds!==undefined&&(!Number.isSafeInteger(input.intervalSeconds)||input.intervalSeconds<60))throw new Error('Invalid native Schedule interval');
@@ -73,13 +79,14 @@ export class ResearchCoordinator {
       CREATE TABLE IF NOT EXISTS research_input_epochs (input_id TEXT PRIMARY KEY,epoch INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS research_ticket_epochs (ticket_id TEXT PRIMARY KEY,epoch INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS research_outbox (id TEXT PRIMARY KEY,delegation_id TEXT NOT NULL,value TEXT NOT NULL)`);
-    this.status=input.model?{status:'configured',message:'持续研究环境已接通；进展和判断以已保存工单及报告为准。'}:{status:'unconfigured',message:'研究环境尚未就绪；委托和历史已保存，尚未派发研究。'};
+    this.status={status:'unconfigured',message:''};this.#refreshStatus();
     this.controlPort={status:this.status,settle:async({delegation,operation,isCurrent})=>{
       await this.#queue(async()=>{await this.#retire(delegation.id);});
       setImmediate(()=>this.changed(delegation.id));
       if(!isCurrent())return {outcome:'unknown',evidence:'控制资格已变化；旧回执不确认当前状态。'};
+      this.#refreshStatus();const ready=this.#runtimeReady();
       return operation.action==='resume'
-        ?{outcome:input.model?'eligible':'unavailable',evidence:input.model?'原有资源已收束；恢复资格具备，业务状态提交后继续研究。':'未配置模型；没有研究派发。'}
+        ?{outcome:ready?'eligible':'unavailable',evidence:ready?'原有资源已收束；恢复资格具备，业务状态提交后继续研究。':'研究模型或运行插件未就绪；没有研究派发。'}
         :{outcome:'stopped',evidence:'此委托持有的原生会话已取消、等待收束；已知 Schedule 已禁用。'};
     }};
   }
@@ -89,7 +96,11 @@ export class ResearchCoordinator {
     this.#o.store.scope(this.#o.owner,id);const found=this.#units.get(id);if(found)return found;
     const db=new EngineStore(this.#o.store,{owner:this.#o.owner,delegationId:id});
     const sources=new SourceStore(this.#o.store,{owner:this.#o.owner,delegationId:id},{protectedDirectories:this.#o.protectedDirectories});
-    sources.configureGrants(this.#o.grants?.[id]??[]);
+    const explicit=this.#o.grants?.[id],policy=this.#o.sourceDefaults;
+    if(explicit!==undefined)sources.configureGrants(explicit);
+    else if(policy)sources.reconcileDefaultGrants(policy.grants,this.#get(id).goal.includes(policy.goalIncludes));
+    else if(sources.hasDefaultPolicyHistory())sources.reconcileDefaultGrants([],false);
+    else sources.configureGrants([]);
     const engine=new this.#o.Engine({repo:db.repo,assessor:db.assessor,executor:db.executor,outbox:db.outbox,
       policy:()=>{const d=this.#get(id);return {version:String(d.goalRevision),paused:d.lifecycle!=='active',evalTimeoutMs:300000,
         gate:(trigger)=>trigger.meta.goalRevision!==d.goalRevision?{admissible:false,reason:'outdated_goal_revision'}:({admissible:true,strength:trigger.human?'explicit':'inferred',basis:trigger.human?{via:'addressed',addressed:'direct',sender:this.#o.owner.principalId}:{via:'bot',observation:{mode:'auto'},rules:['delegation-goal']}}),
@@ -111,6 +122,15 @@ export class ResearchCoordinator {
   }
   #queue<T>(work:()=>Promise<T>):Promise<T> {const next=this.#work.then(work);this.#work=next.then(()=>undefined,()=>undefined);return next;}
   changed(id:string):void {void this.sync(id).catch((error:unknown)=>{this.#fact(id,'reconcile_failed',{status:'unknown',type:error instanceof Error?error.name:'unknown',code:error instanceof StoreError?error.code:undefined,reason:'Host after-commit reconciliation failed; no blind replay.'});});}
+  applySourceDefaults(id:string,role:'operator'|'maintainer',created:boolean):void {
+    const policy=this.#o.sourceDefaults;if(!created||role!=='operator'||!policy||this.#o.grants?.[id]!==undefined)return;
+    const delegation=this.#get(id);if(delegation.goalRevision!==1||!delegation.goal.includes(policy.goalIncludes))return;
+    const sources=this.#unit(id).sources;if(sources.sourceIds().length===0)sources.applyDefaultGrants(policy.grants);
+  }
+  #enforceSourceDefaultScope(id:string):void {
+    const policy=this.#o.sourceDefaults;if(!policy||this.#o.grants?.[id]!==undefined)return;
+    this.#unit(id).sources.reconcileDefaultGrants(policy.grants,this.#get(id).goal.includes(policy.goalIncludes));
+  }
   configureSources(id:string,grants:readonly SourceGrant[]):void {this.#unit(id).sources.configureGrants(grants);this.changed(id);}
   configureNotificationPreferences(id:string,input:BriefPreferences,expectedRevision:number):BriefPreferences{const value=this.#unit(id).notificationSchedules.configure(input,expectedRevision);this.changed(id);return value;}
   pauseResearch(id:string,input:Omit<Parameters<LifecycleControlsStore['pauseResearch']>[0],'expectedRevision'>&{expectedRevision?:number;expectedVersion?:number}):ReturnType<LifecycleControlsStore['status']>{const {expectedVersion,...rest}=input,value=this.#unit(id).lifecycleControls.pauseResearch({...rest,expectedRevision:input.expectedRevision??expectedVersion??0});this.changed(id);return value;}
@@ -137,8 +157,10 @@ export class ResearchCoordinator {
   async start():Promise<void> {for(const d of this.#o.store.list(this.#o.owner)){try{await this.sync(d.id);}catch(error:unknown){this.#fact(d.id,'reconcile_failed',{status:'unknown',type:error instanceof Error?error.name:'unknown',code:error instanceof StoreError?error.code:undefined,reason:'Host startup reconciliation failed; isolated per delegation, no blind replay.'});}}}
   sync(id:string):Promise<void> {return this.#queue(()=>this.#sync(id));}
   async #sync(id:string,scanSources=true):Promise<void> {
-    if(this.#closing||await this.#applyDueLifecyclePlans(id))return;
-    let d=this.#get(id);const u=this.#unit(id);
+    this.#refreshStatus();
+    if(this.#closing)return;
+    let d=this.#get(id);const u=this.#unit(id);this.#enforceSourceDefaultScope(id);
+    if(await this.#applyDueLifecyclePlans(id))return;
     if(d.lifecycle!=='active') {if(d.lifecycle==='ended')this.#recordEndSummary(id);await this.#retire(id);return;}
     if(scanSources)await this.#scanSources(id);
     d=this.#get(id);if(d.lifecycle==='ended'){this.#recordEndSummary(id);await this.#retire(id);return;}if(d.lifecycle!=='active')return;
@@ -153,7 +175,7 @@ export class ResearchCoordinator {
     for(const item of u.decisions.list().filter(item=>item.qualification==='current'))for(const response of item.responses)
       u.engine.receive({...this.#trigger(id,`decision-response-${response.responseId}`,'operator',`SENTISCOPE_OPERATOR_RESPONSE\n${JSON.stringify({id:item.id,revision:item.revision,responseId:response.responseId})}\n用 research_context/read_decision 核对当前资格后读取原话。知悉不等于采纳；只让依赖选择的部分等待，继续独立研究。`,true),threads:[{source:'workbench-response',id:response.responseId}]});
     u.engine.evaluateDue();
-    if(!this.#o.model)return;
+    if(!this.#o.model||!this.#runtimeReady())return;
     const currentEpoch=u.sources.qualificationEpoch();
     for(const live of [...this.#live.values()])if(live.run.binding.delegationId===id&&(live.run.binding.goalRevision!==d.goalRevision||live.run.binding.epoch!==currentEpoch))await this.#closeRun(live);
     if(this.#o.controls&&!this.#o.controls.canStart(id))return;
@@ -714,13 +736,14 @@ export class ResearchCoordinator {
     u.lifecycleSummaries.record(String(activity.detail.operationId),'end',d.createdAt,{plans,choices,executions,observations,failures,unknowns,pending},{epoch:u.sources.qualificationEpoch(),goalRevision:d.goalRevision});
   }
   detail(id:string):Record<string,unknown> {
+    this.#refreshStatus();
     const d=this.#get(id),u=this.#unit(id),epoch=u.sources.qualificationEpoch();
     const reports=this.#o.store.connection.prepare('SELECT value FROM research_reports WHERE delegation_id=? ORDER BY created_at').all(id).map(row=>JSON.parse(row.value as string));
     const technical=this.#o.store.connection.prepare('SELECT kind,created_at,detail FROM research_facts WHERE delegation_id=? ORDER BY seq DESC LIMIT 100').all(id).reverse().map(r=>({kind:r.kind,createdAt:r.created_at,detail:JSON.parse(r.detail as string)}));
     const main=this.#runRows(id).filter(r=>r.binding.role==='main').at(-1);
-    const unknownResource=[...new Map(this.#runRows(id).map(r=>[r.key,r])).values()].some(r=>r.state==='unknown'||r.scheduleState==='unknown')||u.followups.list().some(r=>['creating','unknown'].includes(r.schedule.status))||u.notificationSchedules.list().some(r=>['creating','unknown'].includes(r.schedule.status));
     const resourceStatus=this.#o.controls?.snapshot(id);
-    const researchStatus=d.lifecycle!=='active'?{status:d.lifecycle}:unknownResource?{status:'unknown',reason:'部分原生资源或停止回执未确认；该部分隔离，未盲重放。'}:!this.#o.model?{status:'unconfigured'}:resourceStatus?.modelDispatch==='waiting_resources'&&resourceStatus.activeModelRequests===0?{status:'waiting',reason:resourceStatus.block??'研究资源尚未就绪；原委托及证据保留。'}:u.lifecycleControls.status().researchPaused?{status:'paused',reason:'研究暂停中；未派发新的主研究资源。'}:main?.state==='current'?{status:'following'}:{status:'not_started',reason:'等待提交后的原生资源接线。'};
+    const unknownResource=[...new Map(this.#runRows(id).map(r=>[r.key,r])).values()].some(r=>r.state==='unknown'||r.scheduleState==='unknown')||u.followups.list().some(r=>['creating','unknown'].includes(r.schedule.status))||u.notificationSchedules.list().some(r=>['creating','unknown'].includes(r.schedule.status))||resourceStatus?.block==='host_resource_unconfirmed';
+    const researchStatus=d.lifecycle!=='active'?{status:d.lifecycle}:unknownResource?{status:'unknown',reason:resourceStatus?.block==='host_resource_unconfirmed'?'host_resource_unconfirmed':'部分原生资源或停止回执未确认；该部分隔离，未盲重放。'}:!this.#o.model?{status:'unconfigured'}:!this.#runtimeReady()?{status:'unavailable',reason:'runtime_plugin_unready'}:resourceStatus?.modelDispatch==='waiting_resources'&&resourceStatus.activeModelRequests===0?{status:'waiting',reason:resourceStatus.budget.expired?'budget_expired':resourceStatus.block??'研究资源尚未就绪；原委托及证据保留。'}:u.lifecycleControls.status().researchPaused?{status:'paused',reason:'研究暂停中；未派发新的主研究资源。'}:main?.state==='current'?{status:'following'}:{status:'not_started',reason:'等待提交后的原生资源接线。'};
     const intakeBinding={owner:this.#o.owner,delegationId:id,goalRevision:d.goalRevision,epoch,generation:main?.binding.generation??1,role:'main' as const};
     const reportCurrent=(report:{goalRevision:number;epoch:number})=>report.goalRevision===d.goalRevision&&report.epoch===epoch;
     const bodyCurrent=(record:{goalRevision:number;epoch:number;evidence?:readonly{ref:string;hash:string}[];content?:{evidence:readonly{ref:string;hash:string}[]}})=>{const refs=record.content?.evidence??record.evidence??[];return reportCurrent(record)||(refs.length>0&&refs.every(reference=>u.sources.canReplay(reference.ref,reference.hash)));};

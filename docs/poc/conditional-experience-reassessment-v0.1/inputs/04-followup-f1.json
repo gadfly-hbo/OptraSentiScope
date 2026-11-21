@@ -1,0 +1,56 @@
+{
+  "package_id": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "batch_id": "followup_delegations",
+  "sub_delegation_id": "followup_f1",
+  "synthetic": true,
+  "calculation_mode": "OFF",
+  "timezone": "UTC",
+  "available_at": "2026-05-10T09:00:00Z",
+  "delegation": {
+    "delegation_id": "SYN-D-FOLLOWUP-F1",
+    "goal": "处理新的 SYN-F1 面板清洁检查委托；核对已有经验的业务条件、有效时间和读取权限后再决定是否采用。",
+    "required_work": [
+      "查找并读取本 Agent 在此前委托实际形成的 EXP-CLEAN-001 当前版本或其明确后继经验，记录准确 id / version。",
+      "逐项比较目标涂层、批次及去膜状态、清洁剂、擦布、观察流程、as_of 与 valid_until、owner 和来源权限。",
+      "记录 experience_use.decision 为 applied 或 not_applied，并给出由目标证据和经验条件共同支持的理由。",
+      "若采用，必须在最终检查建议中说明实际影响：改变了哪项检查、适用范围、先后顺序或不采用的旧建议，并关联受影响产出；只写‘参考了经验’不够。",
+      "若采用，仍须保留反证、当前限制和 UNKNOWN，不恢复对整个 SYN-C1 或 SYN-F2 的旧广泛建议。",
+      "若此前委托没有实际形成可读经验，将经验状态记为 UNKNOWN，不能从 reference 或虚构记忆补齐。"
+    ],
+    "business_boundary": "只交付检查建议，不执行清洁或停用操作；最终业务措辞和方案可有依据地不同。"
+  },
+  "evidence": [
+    {
+      "evidence_id": "E-FU-F1-001",
+      "version": 1,
+      "effective_at": "2026-05-10T08:00:00Z",
+      "available_at": "2026-05-10T08:30:00Z",
+      "source_id": "SRC-SYN-FOLLOWUP",
+      "status": "RECORDED",
+      "content": {
+        "text": "新委托只涉及 SYN-F1 的 SYN-C1 面板；保护膜移除已由复核人确认，拟使用 SYN-D1、SYN-W1，并在室内清洁后静置 10 分钟观察。",
+        "target_question": "如何安排擦布痕迹检查，以及是否需要暂缓 SYN-D1。",
+        "unknowns": [
+          "本委托尚未产生清洁结果",
+          "实际业务收益仍为 UNKNOWN"
+        ]
+      }
+    },
+    {
+      "evidence_id": "E-FU-F1-002",
+      "version": 1,
+      "effective_at": "2026-05-10T08:40:00Z",
+      "available_at": "2026-05-10T08:45:00Z",
+      "source_id": "SRC-SYN-ACCESS",
+      "status": "GRANT_ACTIVE",
+      "content": {
+        "as_of": "2026-05-10T08:40:00Z",
+        "enterprise_id": "SYN-ENT-COND",
+        "owner_id": "SYN-OWNER-COND",
+        "origin_experience_read": true,
+        "origin_source_read": true,
+        "permission_note": "本委托与初始委托同 owner，经验及其原始合成来源均可读；权限只覆盖读取和建议，不覆盖真实操作。"
+      }
+    }
+  ]
+}

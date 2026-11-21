@@ -1,0 +1,95 @@
+{
+  "package_id": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "version": "0.1",
+  "synthetic": true,
+  "calculation_mode": "OFF",
+  "timezone": "UTC",
+  "agent_visible": true,
+  "scenario": {
+    "title": "虚构面板的清洁痕迹与跨委托经验",
+    "enterprise_id": "SYN-ENT-COND",
+    "owner_id": "SYN-OWNER-COND",
+    "origin_delegation_id": "SYN-D-ORIGIN",
+    "entity_declaration": "所有主体、材料、记录、权限和事件均为人工构造；SYN-WORKSHOP-01 不指代任何真实企业。",
+    "business_boundary": "Agent 只依据已释放的合成资料形成判断、建议和经验记录，不执行清洁、采购、停用或其他真实操作。"
+  },
+  "operating_rules": {
+    "offline_only": true,
+    "calculation": "OFF；不得补做统计、因果或业务效果计算，只陈述资料直接支持的内容。",
+    "release_discipline": "只能读取本批及此前已释放的 inputs 文件和本 Agent 的实际历史产出；不得读取未来批次。",
+    "agent_forbidden_paths": [
+      "README.md",
+      "release-plan.json",
+      "reference/",
+      "manifest.json"
+    ],
+    "citation_contract": {
+      "required_fields": [
+        "evidence_id",
+        "version",
+        "source_id"
+      ],
+      "restore_rule": "引用必须能定位到已释放 inputs 中同版 evidence 对象；讨论旧记录时必须显式引用旧 version，不能用 current 代替。",
+      "insufficient": "只写来源名、只写 evidence_id 而无版本、引用不存在的内容或把任务说明当证据均不充分。"
+    },
+    "versioning": "修正判断、建议或经验时新增版本并记录 supersedes；旧版及其当时理由保留，不覆盖、不删除、不改写历史。",
+    "failure_and_unknown": "FAILED 只表示该次尝试失败；UNKNOWN 表示资料未回答。二者不得改写成成功、阴性结果、零影响或已证实事实。",
+    "independence": "结论和措辞不唯一，但每项事实性理由必须有可还原引用，建议必须说明与判断的依赖或独立性。"
+  },
+  "experience_policy": {
+    "experience_id": "EXP-CLEAN-001",
+    "initial_version": 1,
+    "valid_until": "2026-06-30T23:59:59Z",
+    "business_conditions": [
+      "面板涂层为 SYN-C1",
+      "清洁剂为 SYN-D1",
+      "擦布为 SYN-W1",
+      "室内清洁后静置 10 分钟观察",
+      "同一 SYN-ENT-COND / SYN-OWNER-COND 且来源读取权限有效"
+    ],
+    "required_fields": [
+      "summary",
+      "basis_judgment",
+      "evidence",
+      "business_conditions",
+      "valid_until",
+      "limitations",
+      "unknowns",
+      "revalidate_when",
+      "status"
+    ],
+    "version_rule": "后续可保留、限缩或撤回旧经验；若撤回旧经验而仍有受支持的子集，应以新版本或明确后继经验保留该子集及其 UNKNOWN，不能静默消失。"
+  },
+  "source_registry": [
+    {
+      "source_id": "SRC-SYN-OPS-LOG",
+      "synthetic": true,
+      "kind": "虚构操作与复核记录",
+      "owner_id": "SYN-OWNER-COND"
+    },
+    {
+      "source_id": "SRC-SYN-BADGE-LOG",
+      "synthetic": true,
+      "kind": "虚构访客用品记录",
+      "owner_id": "SYN-OWNER-COND"
+    },
+    {
+      "source_id": "SRC-SYN-LAB-RESULT",
+      "synthetic": true,
+      "kind": "虚构分析尝试与失败回执",
+      "owner_id": "SYN-OWNER-COND"
+    },
+    {
+      "source_id": "SRC-SYN-ACCESS",
+      "synthetic": true,
+      "kind": "虚构委托权限登记",
+      "owner_id": "SYN-OWNER-COND"
+    },
+    {
+      "source_id": "SRC-SYN-FOLLOWUP",
+      "synthetic": true,
+      "kind": "虚构后续委托条件单",
+      "owner_id": "SYN-OWNER-COND"
+    }
+  ]
+}

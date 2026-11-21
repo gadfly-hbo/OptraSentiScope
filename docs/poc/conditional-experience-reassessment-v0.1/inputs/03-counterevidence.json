@@ -1,0 +1,71 @@
+{
+  "package_id": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "batch_id": "counterevidence",
+  "synthetic": true,
+  "calculation_mode": "OFF",
+  "timezone": "UTC",
+  "available_at": "2026-04-07T09:00:00Z",
+  "delegation": {
+    "delegation_id": "SYN-D-ORIGIN",
+    "goal": "把落入原适用范围的反证纳入当前判断和经验，并独立重评每条关联建议。",
+    "required_work": [
+      "明确反证影响 J-CLEAN-001 的哪一部分；可准确限缩，或撤回过宽解释并保留有依据的子集／UNKNOWN，不能原样照搬原广泛结论。",
+      "分别完成 R-CLEAN-INSPECT-001 与 R-CLEAN-PAUSE-001 的重评，各自给出保留、限缩、修正或撤回及理由，不用一个总评替代两项。",
+      "不得继续向 SYN-F2 或整个 SYN-C1 范围照搬已失去前提的旧建议；若某建议仅对 SYN-F1 有依据，须明确该边界。",
+      "R-BADGE-001 与清洁判断无支持依赖，不创建针对它的清洁反证重评，也不借反证改写其历史。",
+      "更新 EXP-CLEAN-001 的当前版本或明确后继经验，保留旧版、版本链、反证、有效时间、限制和 UNKNOWN。",
+      "保留 E-NEW-003 与 E-COUNTER-003 的失败及 UNKNOWN；不得把未重跑写成复核成功。"
+    ],
+    "continuity": "使用本 Agent 前两批实际产出及其版本链；reference 不是历史产出替身。"
+  },
+  "evidence": [
+    {
+      "evidence_id": "E-COUNTER-001",
+      "version": 1,
+      "effective_at": "2026-04-05T10:00:00Z",
+      "available_at": "2026-04-06T08:00:00Z",
+      "source_id": "SRC-SYN-OPS-LOG",
+      "status": "VERIFIED_SYNTHETIC",
+      "content": {
+        "text": "落入原适用范围的 SYN-F2 复核发现保护膜仍在。使用 SYN-D1、仅用清水以及不使用清洁剂的擦拭对照都出现相同浅色痕迹；痕迹图样与保护膜印刷纹路一致。",
+        "countered_interpretation": "该记录反驳把 SYN-F2 的痕迹特异归因于 SYN-D1 的解释，但不直接回答 SYN-F1 的成因。",
+        "unknowns": [
+          "保护膜之外是否还有其他成因仍为 UNKNOWN"
+        ]
+      }
+    },
+    {
+      "evidence_id": "E-COUNTER-002",
+      "version": 1,
+      "effective_at": "2026-04-05T11:00:00Z",
+      "available_at": "2026-04-06T09:00:00Z",
+      "source_id": "SRC-SYN-OPS-LOG",
+      "status": "VERIFIED_SYNTHETIC",
+      "content": {
+        "text": "SYN-F1 的保护膜移除已由第二人复核；本批配对观察中，使用 SYN-D1 后可见浅色痕迹，清水对照未出现相同痕迹。",
+        "scope": "只支持当前 SYN-F1、SYN-C1、SYN-D1、SYN-W1、室内 10 分钟条件下的有限观察，不外推到其他条件。",
+        "unknowns": [
+          "成分和长期效果仍为 UNKNOWN",
+          "实际业务收益仍为 UNKNOWN"
+        ]
+      }
+    },
+    {
+      "evidence_id": "E-COUNTER-003",
+      "version": 1,
+      "effective_at": "2026-04-06T10:00:00Z",
+      "available_at": "2026-04-06T10:30:00Z",
+      "source_id": "SRC-SYN-LAB-RESULT",
+      "status": "FAILED",
+      "related_failed_evidence": {
+        "evidence_id": "E-NEW-003",
+        "version": 1
+      },
+      "content": {
+        "attempt": "仪器仍不可用，此前失败的成分鉴别没有重跑。",
+        "result": "UNKNOWN",
+        "failure_rule": "没有新分析结果；不得将本回执解释为成分已确认或反证已被实验室验证。"
+      }
+    }
+  ]
+}

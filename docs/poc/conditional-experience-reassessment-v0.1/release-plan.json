@@ -1,0 +1,200 @@
+{
+  "packageId": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "version": "0.1",
+  "packageStatus": "FIXED_CANDIDATE",
+  "synthetic": true,
+  "calculation": "OFF",
+  "timezone": "UTC",
+  "realModelRun": "NOT_RUN",
+  "releaseClock": "availableAt 是剧情内的逻辑释放时点；等待上一批实际产出即可释放下一批，不需要等待现实日期或睡眠计时。",
+  "neverAgentVisible": [
+    "README.md",
+    "release-plan.json",
+    "reference/source-ledger.json",
+    "reference/expected-observations.json",
+    "reference/review-sheet.md",
+    "reference/run-record.json",
+    "manifest.json"
+  ],
+  "continuityRules": [
+    "initial_delegation、new_evidence、counterevidence 使用同一 SYN-D-ORIGIN 的实际上下文与产出。",
+    "两个后续委托各自新建 delegation，但正例与初始委托同 owner；仅通过实际可用的经验机制取得历史，不注入 reference。",
+    "此前输入可按本计划累计可见；此前 Agent 产出保留原版本。若实际历史缺失，记 UNKNOWN 或未运行，不制作貌似真实的历史。",
+    "释放方只提供资料与权限，不替 Agent 作判断、不提示 reference 中的可接受表现。"
+  ],
+  "batches": [
+    {
+      "batchId": "initial_delegation",
+      "label": "初始委托",
+      "availableAt": "2026-03-05T09:00:00Z",
+      "inputFiles": [
+        {
+          "path": "inputs/00-scenario.json",
+          "availableAt": "2026-03-05T09:00:00Z",
+          "visibleTo": [
+            "SYN-D-ORIGIN"
+          ]
+        },
+        {
+          "path": "inputs/01-initial-delegation.json",
+          "availableAt": "2026-03-05T09:00:00Z",
+          "visibleTo": [
+            "SYN-D-ORIGIN"
+          ]
+        }
+      ],
+      "visibleScope": {
+        "delegationIds": [
+          "SYN-D-ORIGIN"
+        ],
+        "previousInputs": false,
+        "actualPriorAgentOutputs": false,
+        "reference": false
+      },
+      "prohibitedEarlyRelease": [
+        {
+          "path": "inputs/02-new-evidence.json",
+          "notBefore": "2026-03-22T09:00:00Z"
+        },
+        {
+          "path": "inputs/03-counterevidence.json",
+          "notBefore": "2026-04-07T09:00:00Z"
+        },
+        {
+          "path": "inputs/04-followup-f1.json",
+          "notBefore": "2026-05-10T09:00:00Z"
+        },
+        {
+          "path": "inputs/05-followup-c2.json",
+          "notBefore": "2026-05-11T09:00:00Z"
+        }
+      ]
+    },
+    {
+      "batchId": "new_evidence",
+      "label": "新证据",
+      "availableAt": "2026-03-22T09:00:00Z",
+      "inputFiles": [
+        {
+          "path": "inputs/02-new-evidence.json",
+          "availableAt": "2026-03-22T09:00:00Z",
+          "visibleTo": [
+            "SYN-D-ORIGIN"
+          ]
+        }
+      ],
+      "visibleScope": {
+        "delegationIds": [
+          "SYN-D-ORIGIN"
+        ],
+        "previousInputs": [
+          "inputs/00-scenario.json",
+          "inputs/01-initial-delegation.json"
+        ],
+        "actualPriorAgentOutputs": [
+          "initial_delegation 的实际 J-CLEAN-001、三条建议、EXP-CLEAN-001 及依赖关系"
+        ],
+        "reference": false
+      },
+      "prohibitedEarlyRelease": [
+        {
+          "path": "inputs/03-counterevidence.json",
+          "notBefore": "2026-04-07T09:00:00Z"
+        },
+        {
+          "path": "inputs/04-followup-f1.json",
+          "notBefore": "2026-05-10T09:00:00Z"
+        },
+        {
+          "path": "inputs/05-followup-c2.json",
+          "notBefore": "2026-05-11T09:00:00Z"
+        }
+      ]
+    },
+    {
+      "batchId": "counterevidence",
+      "label": "反证",
+      "availableAt": "2026-04-07T09:00:00Z",
+      "inputFiles": [
+        {
+          "path": "inputs/03-counterevidence.json",
+          "availableAt": "2026-04-07T09:00:00Z",
+          "visibleTo": [
+            "SYN-D-ORIGIN"
+          ]
+        }
+      ],
+      "visibleScope": {
+        "delegationIds": [
+          "SYN-D-ORIGIN"
+        ],
+        "previousInputs": [
+          "inputs/00-scenario.json",
+          "inputs/01-initial-delegation.json",
+          "inputs/02-new-evidence.json"
+        ],
+        "actualPriorAgentOutputs": [
+          "前两批实际判断、建议、经验、版本链及重评记录"
+        ],
+        "reference": false
+      },
+      "prohibitedEarlyRelease": [
+        {
+          "path": "inputs/04-followup-f1.json",
+          "notBefore": "2026-05-10T09:00:00Z"
+        },
+        {
+          "path": "inputs/05-followup-c2.json",
+          "notBefore": "2026-05-11T09:00:00Z"
+        }
+      ]
+    },
+    {
+      "batchId": "followup_delegations",
+      "label": "后续委托",
+      "availableAt": "2026-05-10T09:00:00Z",
+      "inputFiles": [
+        {
+          "path": "inputs/04-followup-f1.json",
+          "availableAt": "2026-05-10T09:00:00Z",
+          "visibleTo": [
+            "SYN-D-FOLLOWUP-F1"
+          ]
+        },
+        {
+          "path": "inputs/05-followup-c2.json",
+          "availableAt": "2026-05-11T09:00:00Z",
+          "visibleTo": [
+            "SYN-D-FOLLOWUP-C2"
+          ]
+        }
+      ],
+      "visibleScope": {
+        "delegationIds": [
+          "SYN-D-FOLLOWUP-F1",
+          "SYN-D-FOLLOWUP-C2"
+        ],
+        "previousInputs": "仅按各 delegation 的实际授权提供；不得把一个后续委托的目标资料提前给另一个。",
+        "actualPriorAgentOutputs": "只通过实际经验查读机制提供当前经验及其可访问历史；不粘贴 reference 或作者制作的答案。",
+        "reference": false
+      },
+      "prohibitedEarlyRelease": [
+        {
+          "path": "inputs/05-followup-c2.json",
+          "notBefore": "2026-05-11T09:00:00Z",
+          "alsoNotVisibleTo": [
+            "SYN-D-FOLLOWUP-F1"
+          ]
+        },
+        {
+          "path": "inputs/04-followup-f1.json",
+          "notBefore": "2026-05-10T09:00:00Z",
+          "alsoNotVisibleTo": [
+            "SYN-D-FOLLOWUP-C2"
+          ]
+        }
+      ]
+    }
+  ],
+  "batchGate": "每批保存实际输出身份与可见输入清单后再释放下一批；任何真实运行或评分若未发生，保持 NOT_RUN / 未运行。"
+}

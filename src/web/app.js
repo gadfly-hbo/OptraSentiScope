@@ -104,7 +104,7 @@ function researchLabel(item) {
   if (item.lifecycle === 'resuming') return '待恢复资格核对';
   if (['paused', 'ended'].includes(item.lifecycle)) return '研究已停止';
   const status = item.research?.status;
-  return ({ not_started: '等待运行资格', unconfigured: '等待研究运行资格', paused: '研究已暂停', following: '持续跟进已启用', running: '研究执行中', researching: '研究执行中', waiting: '等待信息或研究资源', blocked: '研究受阻', failed: '研究失败', unknown: '研究状态未确认 · UNKNOWN', ready: '本轮研究报告就绪', observing: '有理由观察', idle: '持续跟进中' })[status] || (status ? `研究状态：${status}` : '运行状态待核实');
+  return ({ not_started: '等待运行资格', unconfigured: '等待研究运行资格', unavailable: '运行插件未就绪', paused: '研究已暂停', following: '持续跟进已启用', running: '研究执行中', researching: '研究执行中', waiting: '等待信息或研究资源', blocked: '研究受阻', failed: '研究失败', unknown: '研究状态未确认 · UNKNOWN', ready: '本轮研究报告就绪', observing: '有理由观察', idle: '持续跟进中' })[status] || (status ? `研究状态：${status}` : '运行状态待核实');
 }
 function announce(text) { $('#announcement').textContent = text; }
 function current() { return state.detail?.delegation?.id === state.selectedId ? state.detail.delegation : null; }
@@ -246,8 +246,8 @@ function lifecycleNotice(item) {
   if (item.lifecycle === 'paused') return '<div class="notice"><strong>委托已暂停</strong><p>已有目标、补充内容和历史保留。恢复前将重新核对当前资格。</p></div>';
   if (item.lifecycle === 'ended') return '<div class="notice"><strong>委托已结束 · 历史保留</strong><p>新信息不会自动重开，也不表示目标已达成或实际经营行动被撤销。</p></div>';
   const rawReason = state.detail?.researchStatus?.reason || item.research?.reason;
-  const reason = ({budget_exhausted:'委托预算不足，已保存的成果保留；资源由Host管理员处理。',budget_expired:'委托资源授权已到期，尚未派发后续研究。',credential_unavailable:'模型凭据尚未就绪，由Host管理员处理。',credential_revoked:'模型凭据授权已撤回。',egress_denied:'当前资料出口未获授权。',egress_changed:'资料出口授权已变化，旧请求不能继续。',host_resource_unconfirmed:'部分资源结果尚未确认，未盲目重试。'})[rawReason] || rawReason;
-  return `<div class="notice ${['not_started', 'unconfigured', 'blocked', 'failed', 'unknown'].includes(item.research?.status) ? 'warning' : ''}"><strong>${escapeText(researchLabel(item))}</strong><p>${escapeText(state.runtime?.message || '研究运行环境尚未接通。委托和已有记录已经保存，尚未开始研究。')}</p>${reason ? `<p class="meta">当前限制：${escapeText(reason)}</p>` : ''}</div>`;
+  const reason = ({budget_exhausted:'委托预算不足，已保存的成果保留；资源由Host管理员处理。',budget_expired:'委托预算已到期，后续研究未派发；已有成果保留，需 Host 管理员明确配置新预算后恢复。',runtime_plugin_unready:'运行插件未就绪，后续研究未派发；已有委托和成果保留，需 Host 管理员恢复插件并重新核对。',credential_unavailable:'模型凭据尚未就绪，由Host管理员处理。',credential_revoked:'模型凭据授权已撤回。',egress_denied:'当前资料出口未获授权。',egress_changed:'资料出口授权已变化，旧请求不能继续。',host_resource_unconfirmed:'部分资源结果尚未确认，未盲目重试。'})[rawReason] || rawReason;
+  return `<div class="notice ${['not_started', 'unconfigured', 'unavailable', 'blocked', 'failed', 'unknown'].includes(item.research?.status) ? 'warning' : ''}"><strong>${escapeText(researchLabel(item))}</strong><p>${escapeText(state.runtime?.message || '研究运行环境尚未接通。委托和已有记录已经保存，尚未开始研究。')}</p>${reason ? `<p class="meta">当前限制：${escapeText(reason)}</p>` : ''}</div>`;
 }
 
 function detail(item) {

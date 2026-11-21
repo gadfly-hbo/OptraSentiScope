@@ -43,7 +43,7 @@ npm run check:ui
 
 `npm start` 保留原无研究能力的离线工作台，独立于新入口；不自动迁移或接管已运行的8766实例。新入口默认8766，可用 `--config .local/host.json` 指定本机端口及私有数据目录。已有 profile 不覆盖；配置变化生成新的具名 profile。DSH_HOME、存储及依赖均在项目私有目录，不继承个人 DSH 插件/凭据。
 
-Host JSON 支持 `dataDirectory`、`owner {enterpriseId,principalId}`、`port`、可选非敏感 `model {provider,model,maxTokens}`、`intervalSeconds >= 60`、`grants {委托ID: SourceGrant[]}`。授权目录须由 Host 显式指定；浏览器和 Agent 不能扩大授权。未配置 Provider 时保留全部既有记录但不派发模型。当前 launcher 不安装或读取任何真实 Provider/凭据；生产接入与授权另行完成。
+Host JSON 支持 `dataDirectory`、`owner {enterpriseId,principalId}`、`port`、可选非敏感 `model {provider,model,maxTokens}`、`intervalSeconds >= 60`、`grants {委托ID: SourceGrant[]}`，以及 `resourceDefaults.sources={goalIncludes,grants}` 的建单预授权。授权目录和范围短语只由 Host 显式指定；浏览器和 Agent 不能扩大授权，范围不匹配的新委托不自动获权。未配置 Provider 或实际适配器未注册时保留全部既有记录但不派发模型。当前 launcher 不安装或读取任何真实 Provider/凭据；生产接入与授权另行完成。
 
 首次 CI 通过准备入口安装同一已批准精确组合，普通本地 check 只验证现存安装。保留原继承 CI job，不把缺私有SDK时跳过测试当通过。完整 fresh 网络安装与实际 GitHub CI 仍未运行。
 

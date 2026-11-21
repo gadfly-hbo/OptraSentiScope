@@ -1,0 +1,394 @@
+{
+  "package_id": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "package_version": "0.1",
+  "record_type": "TEMPLATE_COPY_TO_EXTERNAL_RUN_DIRECTORY_BEFORE_FILLING",
+  "synthetic_inputs": true,
+  "calculation_mode": "OFF",
+  "timezone": "UTC",
+  "real_model_run": "NOT_RUN",
+  "model_quality_scoring": "NOT_RUN",
+  "run_status": "NOT_RUN",
+  "ac07": {
+    "status": "NOT_RUN",
+    "completeness": "NOT_ASSESSED_INCOMPLETE",
+    "note": "本模板和材料准备不构成完整 AC07，也不构成任何模型质量成绩。"
+  },
+  "provider": {
+    "provider": "NOT_RUN",
+    "protocol": "NOT_RUN",
+    "route": "NOT_RUN",
+    "endpoint_or_gateway_identity": "NOT_RUN",
+    "request_region": "NOT_RUN",
+    "credential_reference_non_secret": "NOT_RUN",
+    "credentials_recorded": false
+  },
+  "model": {
+    "provider_model_id": "NOT_RUN",
+    "registered_model_id": "NOT_RUN",
+    "model_revision_or_snapshot": "NOT_RUN",
+    "complete_resolved_configuration": {
+      "reasoning": "NOT_RUN",
+      "reasoning_effort": "NOT_RUN",
+      "thinking_level": "NOT_RUN",
+      "contextWindow": "NOT_RUN",
+      "maxTokens": "NOT_RUN",
+      "temperature": "NOT_RUN",
+      "topP": "NOT_RUN",
+      "seed": "NOT_RUN",
+      "compat": "NOT_RUN",
+      "input_limits": "NOT_RUN",
+      "output_limits": "NOT_RUN",
+      "tool_protocol": "NOT_RUN",
+      "tool_choice": "NOT_RUN",
+      "enabled_tools": "NOT_RUN",
+      "system_prompt_or_hash": "NOT_RUN",
+      "retry_and_timeout": "NOT_RUN",
+      "raw_configuration_json": "NOT_RUN"
+    }
+  },
+  "host_and_sdk": {
+    "host_version_or_commit": "NOT_RUN",
+    "runtime_version": "NOT_RUN",
+    "sdk_name": "NOT_RUN",
+    "sdk_version": "NOT_RUN",
+    "interface_version": "NOT_RUN",
+    "owner_profile": "NOT_RUN",
+    "workspace_and_data_root_identity": "NOT_RUN",
+    "experience_capability_configuration": "NOT_RUN",
+    "calculation_switch_observed": "NOT_RUN",
+    "additional_extensions_or_plugins": "NOT_RUN"
+  },
+  "batches": [
+    {
+      "batch_id": "initial_delegation",
+      "logical_available_at": "2026-03-05T09:00:00Z",
+      "status": "NOT_RUN",
+      "visible_input_sha256": [],
+      "actual_released_at": null,
+      "started_at": null,
+      "ended_at": null,
+      "duration_ms": null,
+      "duration_status": "NOT_RUN",
+      "configuration_overrides": "NOT_RUN",
+      "token_usage": {
+        "status": "NOT_RUN",
+        "input": null,
+        "output": null,
+        "cache_read": null,
+        "cache_write": null,
+        "total": null,
+        "source": "NOT_RUN"
+      },
+      "cost": {
+        "status": "NOT_RUN",
+        "currency": null,
+        "sdk_estimate": null,
+        "provider_billing": null,
+        "verifiable_cash_charge": null,
+        "billing_evidence": "NOT_RUN",
+        "note": "NOT_RUN 不等于免费。"
+      },
+      "output_identities": [
+        {
+          "delegation_id": "SYN-D-ORIGIN",
+          "session_id": "NOT_RUN",
+          "output_artifact_ids_and_versions": [],
+          "output_sha256": [],
+          "experience_ids_and_versions_written": [],
+          "transcript_or_receipt_path": "NOT_RUN",
+          "status": "NOT_RUN"
+        }
+      ],
+      "failure_or_unknown": "NOT_RUN"
+    },
+    {
+      "batch_id": "new_evidence",
+      "logical_available_at": "2026-03-22T09:00:00Z",
+      "status": "NOT_RUN",
+      "visible_input_sha256": [],
+      "actual_released_at": null,
+      "started_at": null,
+      "ended_at": null,
+      "duration_ms": null,
+      "duration_status": "NOT_RUN",
+      "configuration_overrides": "NOT_RUN",
+      "token_usage": {
+        "status": "NOT_RUN",
+        "input": null,
+        "output": null,
+        "cache_read": null,
+        "cache_write": null,
+        "total": null,
+        "source": "NOT_RUN"
+      },
+      "cost": {
+        "status": "NOT_RUN",
+        "currency": null,
+        "sdk_estimate": null,
+        "provider_billing": null,
+        "verifiable_cash_charge": null,
+        "billing_evidence": "NOT_RUN",
+        "note": "NOT_RUN 不等于免费。"
+      },
+      "output_identities": [
+        {
+          "delegation_id": "SYN-D-ORIGIN",
+          "session_id": "NOT_RUN",
+          "output_artifact_ids_and_versions": [],
+          "output_sha256": [],
+          "experience_ids_and_versions_written": [],
+          "transcript_or_receipt_path": "NOT_RUN",
+          "status": "NOT_RUN"
+        }
+      ],
+      "failure_or_unknown": "NOT_RUN"
+    },
+    {
+      "batch_id": "counterevidence",
+      "logical_available_at": "2026-04-07T09:00:00Z",
+      "status": "NOT_RUN",
+      "visible_input_sha256": [],
+      "actual_released_at": null,
+      "started_at": null,
+      "ended_at": null,
+      "duration_ms": null,
+      "duration_status": "NOT_RUN",
+      "configuration_overrides": "NOT_RUN",
+      "token_usage": {
+        "status": "NOT_RUN",
+        "input": null,
+        "output": null,
+        "cache_read": null,
+        "cache_write": null,
+        "total": null,
+        "source": "NOT_RUN"
+      },
+      "cost": {
+        "status": "NOT_RUN",
+        "currency": null,
+        "sdk_estimate": null,
+        "provider_billing": null,
+        "verifiable_cash_charge": null,
+        "billing_evidence": "NOT_RUN",
+        "note": "NOT_RUN 不等于免费。"
+      },
+      "output_identities": [
+        {
+          "delegation_id": "SYN-D-ORIGIN",
+          "session_id": "NOT_RUN",
+          "output_artifact_ids_and_versions": [],
+          "output_sha256": [],
+          "experience_ids_and_versions_written": [],
+          "transcript_or_receipt_path": "NOT_RUN",
+          "status": "NOT_RUN"
+        }
+      ],
+      "failure_or_unknown": "NOT_RUN"
+    },
+    {
+      "batch_id": "followup_delegations",
+      "sub_delegation_id": "followup_f1",
+      "logical_available_at": "2026-05-10T09:00:00Z",
+      "status": "NOT_RUN",
+      "visible_input_sha256": [],
+      "actual_released_at": null,
+      "started_at": null,
+      "ended_at": null,
+      "duration_ms": null,
+      "duration_status": "NOT_RUN",
+      "configuration_overrides": "NOT_RUN",
+      "token_usage": {
+        "status": "NOT_RUN",
+        "input": null,
+        "output": null,
+        "cache_read": null,
+        "cache_write": null,
+        "total": null,
+        "source": "NOT_RUN"
+      },
+      "cost": {
+        "status": "NOT_RUN",
+        "currency": null,
+        "sdk_estimate": null,
+        "provider_billing": null,
+        "verifiable_cash_charge": null,
+        "billing_evidence": "NOT_RUN",
+        "note": "NOT_RUN 不等于免费；本对象只记录 F1，C2 在独立对象中记录。"
+      },
+      "output_identities": [
+        {
+          "delegation_id": "SYN-D-FOLLOWUP-F1",
+          "session_id": "NOT_RUN",
+          "output_artifact_ids_and_versions": [],
+          "output_sha256": [],
+          "experience_ids_and_versions_read": [],
+          "experience_use_artifact": "NOT_RUN",
+          "transcript_or_receipt_path": "NOT_RUN",
+          "status": "NOT_RUN"
+        }
+      ],
+      "failure_or_unknown": "NOT_RUN"
+    },
+    {
+      "batch_id": "followup_delegations",
+      "sub_delegation_id": "followup_c2",
+      "logical_available_at": "2026-05-11T09:00:00Z",
+      "status": "NOT_RUN",
+      "visible_input_sha256": [],
+      "actual_released_at": null,
+      "started_at": null,
+      "ended_at": null,
+      "duration_ms": null,
+      "duration_status": "NOT_RUN",
+      "configuration_overrides": "NOT_RUN",
+      "token_usage": {
+        "status": "NOT_RUN",
+        "input": null,
+        "output": null,
+        "cache_read": null,
+        "cache_write": null,
+        "total": null,
+        "source": "NOT_RUN"
+      },
+      "cost": {
+        "status": "NOT_RUN",
+        "currency": null,
+        "sdk_estimate": null,
+        "provider_billing": null,
+        "verifiable_cash_charge": null,
+        "billing_evidence": "NOT_RUN",
+        "note": "NOT_RUN 不等于免费；本对象只记录 C2，F1 在独立对象中记录。"
+      },
+      "output_identities": [
+        {
+          "delegation_id": "SYN-D-FOLLOWUP-C2",
+          "session_id": "NOT_RUN",
+          "output_artifact_ids_and_versions": [],
+          "output_sha256": [],
+          "experience_ids_and_versions_read": [],
+          "experience_use_artifact": "NOT_RUN",
+          "transcript_or_receipt_path": "NOT_RUN",
+          "status": "NOT_RUN"
+        }
+      ],
+      "failure_or_unknown": "NOT_RUN"
+    }
+  ],
+  "totals": {
+    "status": "NOT_RUN",
+    "duration_ms": null,
+    "token_usage": null,
+    "sdk_estimate_cost": null,
+    "provider_billing_cost": null,
+    "verifiable_cash_charge": null,
+    "currency": null
+  },
+  "reviewer": {
+    "reviewer_id": "NOT_RUN",
+    "independent_from_all_candidate_authors": "NOT_RUN",
+    "reviewed_at": null,
+    "reviewed_output_manifest_or_sha256": "NOT_RUN",
+    "evidence_location": "NOT_RUN",
+    "conflicts_of_interest": "NOT_RUN"
+  },
+  "review_items": [
+    {
+      "review_item_id": "REL-01",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "CIT-01",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "INI-01",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "INI-02",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "NEW-01",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "NEW-02",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "NEW-03",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "CTR-01",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "CTR-02",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "CTR-03",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "CTR-04",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "HIS-01",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "FU-01",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "FU-02",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "FU-03",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    },
+    {
+      "review_item_id": "RUN-01",
+      "status": "NOT_RUN",
+      "result": "未运行",
+      "evidence": []
+    }
+  ],
+  "overall_model_quality_result": "未运行",
+  "preparation_note": "仅准备合成固定案例与模板；没有真实模型调用、token、费用、输出或质量评分。"
+}

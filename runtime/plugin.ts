@@ -38,12 +38,13 @@ export async function startProductHost(ctx:Context,config:Config,engineering:{lo
  let coordinator:ResearchCoordinator;let controls:HostControls;
  const native=createNativeResearchPort(ctx,{beforeWake:fact=>coordinator.beforeWake(fact),modelStream:(fact,request,next)=>controls.stream(fact,request,next)});
  const localModelRoutes=engineering.localModelRoutes??(config.syntheticTrial?[{provider:SYNTHETIC_TRIAL_PROVIDER,model:'synthetic'}]:undefined);
+ const runtimeReady=()=>!config.model||ctx.llm.listProviders().some(provider=>provider.id===config.model!.provider);
  const defaults:HostDefaults|undefined=config.syntheticTrial?{...config.resourceDefaults,budget:config.resourceDefaults?.budget??{limits:{modelRequests:5000,outputTokens:1000000,computeMilliseconds:0},durationMs:3600000},modelEgress:config.resourceDefaults?.modelEgress??{enabled:true,provider:SYNTHETIC_TRIAL_PROVIDER,model:'synthetic',maxTokens:config.model?.maxTokens??128}}:config.resourceDefaults;
- controls=new HostControls({store,owner:config.owner,modelSelection:config.model,defaults,localModelRoutes,
+ controls=new HostControls({store,owner:config.owner,modelSelection:config.model,defaults,localModelRoutes,runtimeReady,
   credentialRecords:{readRecord:key=>ctx.credentials.readRecord(parseCredentialKey(key)),modifyRecord:(key,mutate)=>ctx.credentials.modifyRecord(parseCredentialKey(key),mutate)},
   isCurrent:b=>coordinator?.isCurrentBinding(b)??false,verifyInput:b=>coordinator.verifyModelInput(b),halt:(b,code)=>coordinator.haltForResources(b,code),changed:id=>coordinator?.changed(id)});
  const project=resolve(dirname(fileURLToPath(import.meta.url)),'..');
- coordinator=new ResearchCoordinator({store,owner:config.owner,native,Engine,controls,model:config.model,intervalSeconds:config.intervalSeconds,grants:config.grants,notificationDefaults:config.notificationDefaults,protectedDirectories:[resolve(project,'.local'),resolve(project,'runtime'),resolve(project,'.git'),directory]});
+ coordinator=new ResearchCoordinator({store,owner:config.owner,native,Engine,controls,model:config.model,intervalSeconds:config.intervalSeconds,grants:config.grants,sourceDefaults:defaults?.sources,runtimeReady,notificationDefaults:config.notificationDefaults,protectedDirectories:[resolve(project,'.local'),resolve(project,'runtime'),resolve(project,'.git'),directory]});
  let host:Awaited<ReturnType<typeof startLocalHost>>|undefined;
  try{
   host=await startLocalHost({store,owner:config.owner,port:config.port,controlPort:coordinator.controlPort,researchPort:coordinator,auth:config.auth,allowUnauthenticated:!config.auth&&Boolean(engineering.localModelRoutes?.length)});
