@@ -20,7 +20,7 @@
 | P04 U01–U12 浏览器 | PASS（工程 UI 范围，待用户产品体验） | 见下方 U 矩阵；真实外部浏览器、HTTP 与 SQLite，窄屏/键盘/断连分别留证 |
 | P05 owner/凭据/出口/计算 OFF/SDK | PASS（本机合成边界；生产项 NOT_RUN） | `.local/host-controls-checks/run-1795245935638-260f0873-e4ba-4576-a205-3d34c06f8929/runner-result.json`；含实际官方 Engine worker 的 `run_compute` 拒绝。R02 本机登录/角色见 `test/server-auth.test.ts` 与 `.local/auth-ui-checks/run-8TpADq` |
 | P05 跨版本恢复与长流 | PASS（本机隔离范围） | 崩溃后备份恢复 `.local/recovery-checks/run-1795231389680-d4fbd51a-734f-4aae-bccf-f70002e4486c/result.json`；长流 `.local/longstream-checks/run-1795231877280/runner-result.json` |
-| 完整检查与审计 | PASS（最终候选前） | `npm run check` 全部通过，持久日志 `.local/p03-p05-candidate/full-check-final.log`；315/315 tests；`npm audit --audit-level=high` PASS，0 vulnerabilities；真实浏览器 U01–U12、登录与撤权路径分别 PASS |
+| 完整检查与审计 | PASS（最终候选前） | `npm run check` 全部通过，持久日志 `.local/p03-p05-candidate/full-check-r4.log`；315/315 tests；`npm audit --audit-level=high` PASS，0 vulnerabilities；真实浏览器 U01–U12、登录与撤权路径分别 PASS |
 | 独立复核与四原则最终检查 | NOT_RUN | 固定候选后由全新上下文非作者执行 |
 | PR、两次 CI、合并与试用切换 | NOT_RUN | 已获本轮授权，独立复核后执行 |
 
@@ -65,7 +65,7 @@
 | R03 凭据与组件 | PASS（合成凭据和精确官方包） | CredentialLocal 读取/轮换/撤回、错误脱敏、模型/HTTP/SQLite 扫描通过；SDK 锁、实际模块与 peer 身份通过。真实企业凭据设施 NOT_RUN。 |
 | R04 计算关闭 | PASS（主 Agent＋官方 Engine worker）；真实隔离 NOT_RUN | 原生 `run_compute` 返回 `compute_unavailable/dispatched:false`，Host marker 不存在；主/worker 均无 Host 回退。当前 profile 未提供独立 subagent 工具，不能宣称已验证原生子 Agent 树；容器/VM、文件/进程/网络/配额隔离继续 NOT_RUN。 |
 | R05 四类出口 | PASS（本机配置与合成模型路径）；真实端点 NOT_RUN | 模型精确 route 允许/拒绝、历史资格、撤回零 adapter 调用；外部研究/连接器、外发提醒/导出、遥测/外部备份无 sender 且保持 disabled，额外会话上传未配置。真实外部启用路径不在本机合成范围。 |
-| R06 常驻、异常与长流 | PASS（R3 写放大修复后，待独立重验）；生产常驻 NOT_RUN | 关页、SIGKILL、重开、UNKNOWN 对账通过。已确认停止的旧 Schedule 通过官方公开 delete 退役并先保存业务回执，任务表不再随事件累积。`.local/longstream-checks/run-1795245937905/runner-result.json`：storage 每事件固定 8913 bytes，总写入 R² `0.9999930`、storage R² `0.99999996`；30 次前缀不变检查、无失败写；32 个物化 Session、1443 条原生事件及 16 个 marker/hash 各恰好一份原生报告完整读回。 |
+| R06 常驻、异常与长流 | PASS（R3 写放大修复后，待独立重验）；生产常驻 NOT_RUN | 关页、SIGKILL、重开、UNKNOWN 对账通过。已确认停止的旧 Schedule 通过官方公开 delete 退役并先保存业务回执，任务表不再随事件累积。`.local/longstream-checks/run-1795245937905/runner-result.json`：storage 每事件固定 9992 bytes，总写入 R² `0.9999932`、storage R² `0.99999996`；30 次前缀不变检查、无失败写；32 个物化 Session、1443 条原生事件及 16 个 marker/hash 各恰好一份原生报告完整读回。 |
 
 ## 独立复核 R2 与修复状态
 
@@ -82,6 +82,12 @@
 - 旧版兼容补充：旧运行记录没有 heartbeat/context 标记，首次恢复曾重复创建心跳；现从原生 Schedule 与已保存 context 消息推断旧事实，实际 `6ec330d` 恢复重跑 PASS，未重复派发。
 - 调度退役时序：存活句柄上提前 delete 曾导致 Host-controls 停止/续派失败；现存活期间只 pause，dispose 确认后再 delete 并保存回执。过程中临时诊断自身引入的 `ReferenceError` 已移除，Host-controls 与长流重跑 PASS。
 - artifact-followup 探针曾要求无历史缓存权限时重开仍回放 v1 正文；按遮蔽契约改为断言安全旧版索引，官方链重跑 PASS，未放宽产品权限。
+
+## 独立复核 R4 与修复
+
+- Standards R4：`.local/independent/p03-p05-standards-r4/REPORT.md` PASS，R2/R3 与 R02 全部关闭，无新阻断。
+- Spec R4：`.local/independent/p03-p05-spec-r4/REPORT.md` PASS_WITH_FINDINGS；F-R4-01 为零证据派生正文撤权后投影 fail-open，F-R4-02 为长流数值标注错配。
+- 修复：历史派生正文只有在当前资格或存在可回放准确证据引用时返回；空证据历史记录默认遮蔽。新增 `runtime/revocation-projection.test.mjs` 零证据反例，先复现 FAIL 后转 GREEN。F-R4-02 已按所引 run 更正为 storage 9992 bytes/event、总 R² 0.9999932。
 
 ## 本轮 RED、修复与 fixture 失败留痕
 
