@@ -36,6 +36,8 @@ CI逐字节复用核对到的OptraCall单`check` job，运行根项目锁定依�
 
 真实Provider调用默认未启用，缺预算或出口资格不派发；计算按用户选择保持关闭，无Host执行回退。Host可一次配置resourceDefaults，为新委托分配默认资源而不重置旧账。凭据只用官方项目私有stored-record与非敏感Ref，不把原key写Host JSON。接口、限制与工程验证见[本轮接线记录](Host_运行控制接缝_v0.1.md)。
 
+本机合成试用还可用 `resourceDefaults.sources={goalIncludes,grants}` 一次预授权来源：只有 operator 实际插入新委托且初始目标包含固定短语时才自动取得独立 grant，范围不匹配保持零授权，逐 ID 显式配置优先。目标调整和创建幂等读回不新增默认授权；逐项默认来源身份持久化，当前目标或重启策略失配时仍有效的默认项按单调修订撤回，部分撤权与重启也不使它们复活。它不开放浏览器目录/角色输入。`npm run check:synthetic-trial` 覆盖建单、双委托、范围不匹配、单方撤权、重启、自然预算到期和插件未就绪；有 agent-browser 时可另跑 `npm run check:independent-ui` 做真实浏览器和隔离服务重启演练。
+
 ## 版本化交付与自主跟进
 
 判断/方案可由Agent发布不可变版本，并在当前资格下准确读回；观察与复查由Agent安排，复用原生Schedule。`npm run check:artifact-followup`使用独立官方SDK合成路径，验证到期、事件、重开、撤权与迟到。详细合同及跨epoch旧正文边界见[接线记录](版本化研究交付与自主跟进_v0.1.md)。本批仍无真实模型、企业资料、计算执行或Call接入。

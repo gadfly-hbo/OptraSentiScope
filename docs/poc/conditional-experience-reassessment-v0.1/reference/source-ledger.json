@@ -1,0 +1,439 @@
+{
+  "package_id": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "version": "0.1",
+  "synthetic": true,
+  "calculation_mode": "OFF",
+  "timezone": "UTC",
+  "usage": "仅供释放方与非作者评阅者；包含未来资料和关系真值，绝不给被评 Agent。",
+  "real_model_run": "NOT_RUN",
+  "content_restore_rule": "按 locator.input_file 与 locator.json_pointer 读取输入中的完整 evidence 对象；引用同时核对 evidence_id、version、source_id。manifest 固定文件字节和 sha256。",
+  "release_timeline": [
+    {
+      "batch_id": "initial_delegation",
+      "available_at": "2026-03-05T09:00:00Z",
+      "new_inputs": [
+        "inputs/00-scenario.json",
+        "inputs/01-initial-delegation.json"
+      ]
+    },
+    {
+      "batch_id": "new_evidence",
+      "available_at": "2026-03-22T09:00:00Z",
+      "new_inputs": [
+        "inputs/02-new-evidence.json"
+      ]
+    },
+    {
+      "batch_id": "counterevidence",
+      "available_at": "2026-04-07T09:00:00Z",
+      "new_inputs": [
+        "inputs/03-counterevidence.json"
+      ]
+    },
+    {
+      "batch_id": "followup_delegations",
+      "sub_delegation_id": "followup_f1",
+      "available_at": "2026-05-10T09:00:00Z",
+      "new_inputs": [
+        "inputs/04-followup-f1.json"
+      ]
+    },
+    {
+      "batch_id": "followup_delegations",
+      "sub_delegation_id": "followup_c2",
+      "available_at": "2026-05-11T09:00:00Z",
+      "new_inputs": [
+        "inputs/05-followup-c2.json"
+      ]
+    }
+  ],
+  "evidence_ledger": [
+    {
+      "evidence_id": "E-INIT-001",
+      "version": 1,
+      "source_id": "SRC-SYN-OPS-LOG",
+      "effective_at": "2026-03-02T08:00:00Z",
+      "available_at": "2026-03-02T09:00:00Z",
+      "status": "RECORDED",
+      "first_visible_batch": "initial_delegation",
+      "locator": {
+        "input_file": "inputs/01-initial-delegation.json",
+        "json_pointer": "/evidence/0"
+      },
+      "retention": "原始流程范围持续保留；不能外推为其他涂层或流程的事实。"
+    },
+    {
+      "evidence_id": "E-INIT-002",
+      "version": 1,
+      "source_id": "SRC-SYN-OPS-LOG",
+      "effective_at": "2026-03-02T08:10:00Z",
+      "available_at": "2026-03-02T09:10:00Z",
+      "status_at_initial_release": "RECORDED",
+      "first_visible_batch": "initial_delegation",
+      "locator": {
+        "input_file": "inputs/01-initial-delegation.json",
+        "json_pointer": "/evidence/1"
+      },
+      "old_version_relation": {
+        "current_relation_after_new_evidence": "SUPERSEDED_BY",
+        "successor": {
+          "evidence_id": "E-INIT-002",
+          "version": 2
+        },
+        "handling": "保留 v1 原文及其对初始判断的历史影响；不得把 v1 内容静默改成 v2。"
+      }
+    },
+    {
+      "evidence_id": "E-INIT-004",
+      "version": 1,
+      "source_id": "SRC-SYN-BADGE-LOG",
+      "effective_at": "2026-03-03T11:00:00Z",
+      "available_at": "2026-03-03T11:30:00Z",
+      "status": "RECORDED",
+      "first_visible_batch": "initial_delegation",
+      "locator": {
+        "input_file": "inputs/01-initial-delegation.json",
+        "json_pointer": "/evidence/3"
+      },
+      "dependency_scope": "只支持 R-BADGE-001；与 J-CLEAN-001、两条清洁建议及反证无关。"
+    },
+    {
+      "evidence_id": "E-INIT-003",
+      "version": 1,
+      "source_id": "SRC-SYN-OPS-LOG",
+      "effective_at": "2026-03-03T10:00:00Z",
+      "available_at": "2026-03-04T08:00:00Z",
+      "status": "OBSERVED",
+      "first_visible_batch": "initial_delegation",
+      "locator": {
+        "input_file": "inputs/01-initial-delegation.json",
+        "json_pointer": "/evidence/2"
+      },
+      "retention": "原始观察仍是历史事实；其 SYN-F2 的 SYN-D1 特异归因后来被 E-COUNTER-001 反驳，不能因此删除观察。"
+    },
+    {
+      "evidence_id": "E-NEW-001",
+      "version": 1,
+      "source_id": "SRC-SYN-OPS-LOG",
+      "effective_at": "2026-03-20T10:00:00Z",
+      "available_at": "2026-03-21T08:00:00Z",
+      "status": "OBSERVED",
+      "first_visible_batch": "new_evidence",
+      "locator": {
+        "input_file": "inputs/02-new-evidence.json",
+        "json_pointer": "/evidence/0"
+      },
+      "counterexample_links": [
+        {
+          "evidence_id": "E-COUNTER-001",
+          "version": 1,
+          "scope": "只反驳 SYN-F2 的 SYN-D1 特异解释，不把原观察改写成未发生。"
+        }
+      ]
+    },
+    {
+      "evidence_id": "E-INIT-002",
+      "version": 2,
+      "source_id": "SRC-SYN-OPS-LOG",
+      "effective_at": "2026-03-20T12:00:00Z",
+      "available_at": "2026-03-21T09:00:00Z",
+      "status": "CORRECTION",
+      "first_visible_batch": "new_evidence",
+      "supersedes": {
+        "evidence_id": "E-INIT-002",
+        "version": 1
+      },
+      "locator": {
+        "input_file": "inputs/02-new-evidence.json",
+        "json_pointer": "/evidence/1"
+      },
+      "old_version_relation": {
+        "previous": {
+          "evidence_id": "E-INIT-002",
+          "version": 1
+        },
+        "handling": "当前事实引用 v2；v1 作为旧版和初始判断依据继续保留。"
+      }
+    },
+    {
+      "evidence_id": "E-NEW-003",
+      "version": 1,
+      "source_id": "SRC-SYN-LAB-RESULT",
+      "effective_at": "2026-03-21T10:00:00Z",
+      "available_at": "2026-03-22T08:00:00Z",
+      "status": "FAILED",
+      "result": "UNKNOWN",
+      "first_visible_batch": "new_evidence",
+      "locator": {
+        "input_file": "inputs/02-new-evidence.json",
+        "json_pointer": "/evidence/2"
+      },
+      "retention": "失败回执不是阴性或阳性分析结果；后续仍未重跑。"
+    },
+    {
+      "evidence_id": "E-COUNTER-001",
+      "version": 1,
+      "source_id": "SRC-SYN-OPS-LOG",
+      "effective_at": "2026-04-05T10:00:00Z",
+      "available_at": "2026-04-06T08:00:00Z",
+      "status": "VERIFIED_SYNTHETIC",
+      "first_visible_batch": "counterevidence",
+      "locator": {
+        "input_file": "inputs/03-counterevidence.json",
+        "json_pointer": "/evidence/0"
+      },
+      "counterexample_links": [
+        {
+          "target_judgment_id": "J-CLEAN-001",
+          "scope": "落入原 SYN-C1 适用范围的 SYN-F2；反驳把痕迹特异归因于 SYN-D1 的广泛解释。"
+        },
+        {
+          "evidence_id": "E-INIT-003",
+          "version": 1,
+          "scope": "不推翻擦布出现痕迹这一历史观察，只推翻其 SYN-F2 成因解释。"
+        },
+        {
+          "evidence_id": "E-NEW-001",
+          "version": 1,
+          "scope": "同上，限于 SYN-F2。"
+        }
+      ],
+      "dependent_recommendations": [
+        "R-CLEAN-INSPECT-001",
+        "R-CLEAN-PAUSE-001"
+      ],
+      "explicitly_unrelated": [
+        "R-BADGE-001"
+      ]
+    },
+    {
+      "evidence_id": "E-COUNTER-002",
+      "version": 1,
+      "source_id": "SRC-SYN-OPS-LOG",
+      "effective_at": "2026-04-05T11:00:00Z",
+      "available_at": "2026-04-06T09:00:00Z",
+      "status": "VERIFIED_SYNTHETIC",
+      "first_visible_batch": "counterevidence",
+      "locator": {
+        "input_file": "inputs/03-counterevidence.json",
+        "json_pointer": "/evidence/1"
+      },
+      "supports_subset": {
+        "batch": "SYN-F1",
+        "conditions": "SYN-C1 / SYN-D1 / SYN-W1 / 室内 10 分钟且保护膜移除已复核",
+        "limit": "只支持有限观察，不证明成分、长期效果或业务收益。"
+      },
+      "relationship_to_counterexample": "E-COUNTER-001 的 SYN-F2 反证不能反向抹去本记录支持的 SYN-F1 子集。"
+    },
+    {
+      "evidence_id": "E-COUNTER-003",
+      "version": 1,
+      "source_id": "SRC-SYN-LAB-RESULT",
+      "effective_at": "2026-04-06T10:00:00Z",
+      "available_at": "2026-04-06T10:30:00Z",
+      "status": "FAILED",
+      "result": "UNKNOWN",
+      "first_visible_batch": "counterevidence",
+      "related_failed_evidence": {
+        "evidence_id": "E-NEW-003",
+        "version": 1
+      },
+      "locator": {
+        "input_file": "inputs/03-counterevidence.json",
+        "json_pointer": "/evidence/2"
+      },
+      "retention": "明确未重跑；不得写成成分鉴别成功。"
+    },
+    {
+      "evidence_id": "E-FU-F1-001",
+      "version": 1,
+      "source_id": "SRC-SYN-FOLLOWUP",
+      "effective_at": "2026-05-10T08:00:00Z",
+      "available_at": "2026-05-10T08:30:00Z",
+      "status": "RECORDED",
+      "first_visible_batch": "followup_f1",
+      "locator": {
+        "input_file": "inputs/04-followup-f1.json",
+        "json_pointer": "/evidence/0"
+      },
+      "target_conditions": "SYN-F1 / SYN-C1 / 去膜已复核 / SYN-D1 / SYN-W1 / 室内 10 分钟；结果尚未产生。"
+    },
+    {
+      "evidence_id": "E-FU-F1-002",
+      "version": 1,
+      "source_id": "SRC-SYN-ACCESS",
+      "effective_at": "2026-05-10T08:40:00Z",
+      "available_at": "2026-05-10T08:45:00Z",
+      "status": "GRANT_ACTIVE",
+      "first_visible_batch": "followup_f1",
+      "locator": {
+        "input_file": "inputs/04-followup-f1.json",
+        "json_pointer": "/evidence/1"
+      },
+      "qualification": "同 owner，原始经验及来源可读；as_of 早于 2026-06-30T23:59:59Z。权限、时效与当前受限业务条件均匹配。"
+    },
+    {
+      "evidence_id": "E-FU-C2-001",
+      "version": 1,
+      "source_id": "SRC-SYN-FOLLOWUP",
+      "effective_at": "2026-05-11T08:00:00Z",
+      "available_at": "2026-05-11T08:30:00Z",
+      "status": "RECORDED",
+      "first_visible_batch": "followup_c2",
+      "locator": {
+        "input_file": "inputs/05-followup-c2.json",
+        "json_pointer": "/evidence/0"
+      },
+      "target_conditions": "涂层为 SYN-C2，明确不满足 EXP-CLEAN-001 的 SYN-C1 条件；其他相似条件不弥补该不匹配，SYN-C2 结果 UNKNOWN。"
+    },
+    {
+      "evidence_id": "E-FU-C2-002",
+      "version": 1,
+      "source_id": "SRC-SYN-ACCESS",
+      "effective_at": "2026-05-11T08:40:00Z",
+      "available_at": "2026-05-11T08:45:00Z",
+      "status": "GRANT_ACTIVE",
+      "first_visible_batch": "followup_c2",
+      "locator": {
+        "input_file": "inputs/05-followup-c2.json",
+        "json_pointer": "/evidence/1"
+      },
+      "qualification": "同 owner 且权限、时效满足，但业务涂层不匹配；因此不能以此为由采用 SYN-C1 经验。"
+    }
+  ],
+  "support_dependencies": [
+    {
+      "judgment_id": "J-CLEAN-001",
+      "initial_basis": [
+        {
+          "evidence_id": "E-INIT-001",
+          "version": 1
+        },
+        {
+          "evidence_id": "E-INIT-002",
+          "version": 1
+        },
+        {
+          "evidence_id": "E-INIT-003",
+          "version": 1
+        }
+      ],
+      "later_required_context": [
+        "E-INIT-002 v2 更正",
+        "E-NEW-003 FAILED / UNKNOWN",
+        "E-COUNTER-001 的 SYN-F2 反证",
+        "E-COUNTER-002 的 SYN-F1 有限支持",
+        "E-COUNTER-003 未重跑 / UNKNOWN"
+      ]
+    },
+    {
+      "recommendation_id": "R-CLEAN-INSPECT-001",
+      "depends_on": "J-CLEAN-001",
+      "dependency_reason": "擦布痕迹检查的解释和适用范围依赖清洁痕迹判断。",
+      "reevaluation_required": [
+        "new_evidence",
+        "counterevidence"
+      ],
+      "counterexample_scope": "SYN-F2 不能继续沿用未区分保护膜的旧检查解释；SYN-F1 可保留有限检查或替换方案。"
+    },
+    {
+      "recommendation_id": "R-CLEAN-PAUSE-001",
+      "depends_on": "J-CLEAN-001",
+      "dependency_reason": "是否暂缓 SYN-D1 及其范围依赖对痕迹成因和适用条件的判断。",
+      "reevaluation_required": [
+        "new_evidence",
+        "counterevidence"
+      ],
+      "counterexample_scope": "不得把对整个 SYN-C1 或 SYN-F2 的旧暂停建议原样保留；可限缩到 SYN-F1，或撤回广泛暂停并改为针对性核查。"
+    },
+    {
+      "recommendation_id": "R-BADGE-001",
+      "depends_on": [],
+      "independent_evidence": [
+        {
+          "evidence_id": "E-INIT-004",
+          "version": 1
+        }
+      ],
+      "reevaluation_required": [],
+      "reevaluation_note": "空数组仅指没有支持依赖触发的实质重评；NEW-02 仍要求在新证据批 review-only 确认不受影响，不因此伪造新版或创建反证批任务。",
+      "review_only": [
+        {
+          "batch_id": "new_evidence",
+          "review_item_id": "NEW-02",
+          "required_observation": "确认 R-BADGE-001 与清洁新证据无关且原建议不受影响；可只留 review 记录，不要求新版本。",
+          "new_version_required": false
+        }
+      ],
+      "counterexample_scope": "清洁反证与该建议无关；不得创建清洁判断导致的关联重评、限缩或撤回。"
+    }
+  ],
+  "agent_version_chain_rules": {
+    "fixed_initial_ids": [
+      "J-CLEAN-001",
+      "R-CLEAN-INSPECT-001",
+      "R-CLEAN-PAUSE-001",
+      "R-BADGE-001",
+      "EXP-CLEAN-001"
+    ],
+    "actual_versions": "由实际 Agent 产出确定；初版为 v1，后续若变化则以新版 supersedes 旧版，保留原内容和当时理由。仅新增 review 而不改判断时不要求伪造版本号。",
+    "experience_succession": "可限缩 EXP-CLEAN-001，或撤回过宽旧版并以后继版本／明确后继经验保存 SYN-F1 子集；后续委托必须引用实际当前 id / version，不能猜 v2 或 v3。",
+    "unknowns_to_retain": [
+      "成分鉴别失败且未重跑",
+      "SYN-F2 在 new_evidence 时点的去膜状态 UNKNOWN",
+      "长期效果和业务收益 UNKNOWN",
+      "后续委托尚未产生的清洁结果"
+    ]
+  },
+  "batch_visibility_oracle": [
+    {
+      "batch_id": "initial_delegation",
+      "allowed_evidence_prefixes": [
+        "E-INIT-"
+      ],
+      "forbidden_future_prefixes": [
+        "E-NEW-",
+        "E-COUNTER-",
+        "E-FU-"
+      ]
+    },
+    {
+      "batch_id": "new_evidence",
+      "allowed_evidence_prefixes": [
+        "E-INIT-",
+        "E-NEW-"
+      ],
+      "forbidden_future_prefixes": [
+        "E-COUNTER-",
+        "E-FU-"
+      ]
+    },
+    {
+      "batch_id": "counterevidence",
+      "allowed_evidence_prefixes": [
+        "E-INIT-",
+        "E-NEW-",
+        "E-COUNTER-"
+      ],
+      "forbidden_future_prefixes": [
+        "E-FU-"
+      ]
+    },
+    {
+      "sub_delegation_id": "followup_f1",
+      "additional_target_evidence": [
+        "E-FU-F1-001",
+        "E-FU-F1-002"
+      ],
+      "forbidden_other_target_prefix": "E-FU-C2-"
+    },
+    {
+      "sub_delegation_id": "followup_c2",
+      "additional_target_evidence": [
+        "E-FU-C2-001",
+        "E-FU-C2-002"
+      ],
+      "forbidden_other_target_prefix": "E-FU-F1-"
+    }
+  ]
+}

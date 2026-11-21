@@ -9,6 +9,7 @@ import type{Owner}from'../src/domain.ts';
 import type{SentiStore}from'../src/store.ts';
 import{BudgetStore}from'../src/budget.ts';
 import type{BudgetConfig}from'../src/budget.ts';
+import type{SourceDefaultPolicy}from'../src/sources.ts';
 import{HostCredentials}from'../src/credentials.ts';
 import type{CredentialGrant,CredentialRecordsPort,CredentialUseBinding}from'../src/credentials.ts';
 import{HostEgress}from'../src/egress.ts';
@@ -16,7 +17,7 @@ import type{ModelEgressGrant}from'../src/egress.ts';
 import{createClosedComputePort}from'../src/compute.ts';
 
 export interface LocalModelRoute {readonly provider:string;readonly model:string;}
-export interface HostDefaults {budget?:{limits:BudgetConfig['limits'];durationMs:number};modelEgress?:Omit<ModelEgressGrant,'revision'>;credentials?:readonly Omit<CredentialGrant,'owner'|'delegationId'>[];}
+export interface HostDefaults {budget?:{limits:BudgetConfig['limits'];durationMs:number};modelEgress?:Omit<ModelEgressGrant,'revision'>;credentials?:readonly Omit<CredentialGrant,'owner'|'delegationId'>[];sources?:SourceDefaultPolicy;}
 export interface HostControlOptions {
  defaults?:HostDefaults;
  store:SentiStore;owner:Owner;credentialRecords:CredentialRecordsPort;
@@ -27,6 +28,7 @@ export interface HostControlOptions {
  /** Trusted in-process engineering adapters only. Product JSON cannot declare an external route local. */
  localModelRoutes?:readonly LocalModelRoute[];
  modelSelection?:{provider:string;model:string;maxTokens?:number};
+ runtimeReady?:()=>boolean;
 }
 const codes=new Set(['budget_exhausted','budget_expired','budget_unconfigured','budget_binding_stale','budget_deadline_unsupported','budget_usage_invalid','invalid_budget_usage','budget_dispatch_uncertain','egress_denied','egress_changed','stale_egress_binding','credential_unavailable','credential_revoked','credential_stale','credential_unqualified','credential_missing']);
 const safeCode=(error:unknown)=>error instanceof StoreError&&codes.has(error.code)?error.code:'host_resource_unconfirmed';
@@ -66,7 +68,7 @@ export class HostControls {
  configureBudget(id:string,config:BudgetConfig):void {this.budget(id).configure(config);this.#clear(id);this.#enforceActive(id);this.#o.changed?.(id);}
  configureModelEgress(id:string,grant:ModelEgressGrant):void {const prior=this.egress.snapshot(id).model.revision;this.egress.configure(id,grant);this.#clear(id);if(prior!==grant.revision)for(const op of this.#active.values())if(op.fact.binding.delegationId===id)op.stop('egress_changed');this.#o.changed?.(id);}
  configureCredentials(grants:readonly CredentialGrant[]):void {this.credentials.configure(grants);for(const op of this.#active.values())if(op.credential)try{this.credentials.assertAuthorized(op.credential);}catch{op.stop('credential_revoked');}for(const d of this.#o.store.list(this.#o.owner)){this.#clear(d.id);this.#o.changed?.(d.id);}}
- #rawCanStart(id:string):boolean {const b=this.budget(id).snapshot(),e=this.egress.snapshot(id);return !this.#closed&&b.status!=='unconfigured'&&!b.expired&&!b.overrun&&!b.accountingOverflow&&b.available.model&&e.model.status==='configured'&&Number.isSafeInteger(this.#o.modelSelection?.maxTokens)&&b.remaining.outputTokens>=(this.#o.modelSelection?.maxTokens??Infinity)&&this.#routes.has(JSON.stringify([this.#o.modelSelection?.provider,this.#o.modelSelection?.model]));}
+ #rawCanStart(id:string):boolean {const b=this.budget(id).snapshot(),e=this.egress.snapshot(id);return !this.#closed&&(this.#o.runtimeReady?.()??true)&&b.status!=='unconfigured'&&!b.expired&&!b.overrun&&!b.accountingOverflow&&b.available.model&&e.model.status==='configured'&&Number.isSafeInteger(this.#o.modelSelection?.maxTokens)&&b.remaining.outputTokens>=(this.#o.modelSelection?.maxTokens??Infinity)&&this.#routes.has(JSON.stringify([this.#o.modelSelection?.provider,this.#o.modelSelection?.model]));}
  canStart(id:string):boolean {return !this.#blocked(id)&&this.#rawCanStart(id);}
  snapshot(id:string){const b=this.budget(id).snapshot(),e=this.egress.snapshot(id),activeModelRequests=[...this.#active.values()].filter(x=>x.fact.binding.delegationId===id).length;return {budget:b,egress:e,compute:{status:'unavailable',reason:'isolation_unconfigured'},activeModelRequests,modelDispatch:this.canStart(id)?'eligible':'waiting_resources',block:this.#blocked(id)??null};}
  #check(binding:RunBinding){if(this.#closed||!this.#o.isCurrent(binding))throw new StoreError('stale_egress_binding','当前运行资格已失效；未发送后续资料。',409);}

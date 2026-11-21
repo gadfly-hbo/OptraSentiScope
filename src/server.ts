@@ -22,6 +22,7 @@ export interface LocalHostOptions {
     status: { status: string; message: string };
     detail(id: string): Record<string, unknown>;
     changed(id: string): void;
+    applySourceDefaults?(id: string, role: LocalSession['role'], created: boolean): void;
     respondDecision?(id: string, input: OperatorResponseInput): Promise<unknown>;
     pauseResearch?(id: string, input: {expectedVersion:number;mode:'all'|'direction';scope?:string;reason:string;idempotencyKey:string}): unknown;
     resumeResearch?(id: string, input: {expectedVersion:number;scope?:string;reason:string;idempotencyKey:string}): unknown;
@@ -112,10 +113,12 @@ export async function startLocalHost(options: LocalHostOptions) {
       if (pathname === '/api/delegations' && request.method === 'POST') {
         const body = await readObject(request);
         onlyFields(body, ['goal', 'boundary', 'relatedTo', 'idempotencyKey']);
-        const created = options.store.create(owner, {
+        const result = options.store.createWithOutcome(owner, {
           goal: body.goal as string, boundary: body.boundary as string | undefined,
           relatedTo: body.relatedTo as string | undefined, idempotencyKey: body.idempotencyKey as string,
         });
+        const created = result.delegation;
+        if (result.created) options.researchPort?.applySourceDefaults?.(created.id, 'operator', true);
         notifyChanged(created.id);
         return json(response, 201, detail(created));
       }

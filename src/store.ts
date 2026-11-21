@@ -118,6 +118,10 @@ export class SentiStore {
   }
 
   create(owner: Owner, input: CreateDelegation): Delegation {
+    return this.createWithOutcome(owner, input).delegation;
+  }
+
+  createWithOutcome(owner: Owner, input: CreateDelegation): { delegation: Delegation; created: boolean } {
     this.#validateOwner(owner);
     const goal = this.#nonempty(input.goal, 'goal');
     const boundary = this.#optionalText(input.boundary, 'boundary');
@@ -125,7 +129,7 @@ export class SentiStore {
     const requestHash = this.#hash(['create', input.goal, input.boundary ?? '', input.relatedTo ?? null]);
     return this.withTransaction(() => {
       const existing = this.#replay(owner, key, requestHash);
-      if (existing) return this.get(owner, existing);
+      if (existing) return { delegation: this.get(owner, existing), created: false };
       if (input.relatedTo !== undefined) {
         const original = this.#owned(owner, input.relatedTo);
         if (original.lifecycle !== 'ended') throw new StoreError('conflict', '关联委托尚未结束。', 409);
@@ -136,7 +140,7 @@ export class SentiStore {
       this.#db.prepare('INSERT INTO delegation_revisions VALUES (?, 1, ?, ?, ?, ?, ?)').run(id, goal, boundary, input.goal, input.boundary ?? '', at);
       this.#activity(id, 'delegation_created', at, { goalRevision: 1 });
       this.#remember(owner, key, requestHash, id);
-      return this.get(owner, id);
+      return { delegation: this.get(owner, id), created: true };
     });
   }
 

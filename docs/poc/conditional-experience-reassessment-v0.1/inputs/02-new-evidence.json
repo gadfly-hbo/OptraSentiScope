@@ -1,0 +1,70 @@
+{
+  "package_id": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "batch_id": "new_evidence",
+  "synthetic": true,
+  "calculation_mode": "OFF",
+  "timezone": "UTC",
+  "available_at": "2026-03-22T09:00:00Z",
+  "delegation": {
+    "delegation_id": "SYN-D-ORIGIN",
+    "goal": "在保留初始委托历史的前提下，依据新到资料复看当前判断、经验与建议。",
+    "required_work": [
+      "明确当前 J-CLEAN-001 是保留还是修正，并分别给出证据和理由；不得为了显示更新而无依据改动。",
+      "逐项复看 R-CLEAN-INSPECT-001、R-CLEAN-PAUSE-001 与 R-BADGE-001，说明保留、修正或不受影响的理由。",
+      "处理 E-INIT-002 v2 对 v1 的更正：当前引用用 v2，旧 v1 与其历史作用保留，不得覆盖旧记录。",
+      "保留 E-NEW-003 的 FAILED 和结果 UNKNOWN，不把失败尝试用作支持或反对清洁机制的成功观察。",
+      "按实际变化保留或更新 EXP-CLEAN-001，记录 supersedes、当前适用条件、限制、UNKNOWN 与重评条件。"
+    ],
+    "continuity": "使用本 Agent 在 initial_delegation 中实际形成的产出；若该历史不存在，后续状态标为 UNKNOWN，不得从 reference 补造。"
+  },
+  "evidence": [
+    {
+      "evidence_id": "E-NEW-001",
+      "version": 1,
+      "effective_at": "2026-03-20T10:00:00Z",
+      "available_at": "2026-03-21T08:00:00Z",
+      "source_id": "SRC-SYN-OPS-LOG",
+      "status": "OBSERVED",
+      "content": {
+        "text": "按相同的 SYN-C1 / SYN-D1 / SYN-W1 / 室内 10 分钟流程复看时，SYN-F1 与 SYN-F2 的擦布仍出现浅色痕迹。",
+        "controls": "本次仍未设置清水对照或成分鉴别。",
+        "unknowns": [
+          "痕迹成因仍为 UNKNOWN",
+          "少量合成观察不能证明长期效果"
+        ]
+      }
+    },
+    {
+      "evidence_id": "E-INIT-002",
+      "version": 2,
+      "effective_at": "2026-03-20T12:00:00Z",
+      "available_at": "2026-03-21T09:00:00Z",
+      "source_id": "SRC-SYN-OPS-LOG",
+      "status": "CORRECTION",
+      "supersedes": {
+        "evidence_id": "E-INIT-002",
+        "version": 1
+      },
+      "content": {
+        "text": "更正批次记录：SYN-F1 的保护膜移除已由复核人确认；SYN-F2 的实际保护膜状态为 UNKNOWN。v1 将两个批次都勾为已移除是转录错误。",
+        "old_version_handling": "E-INIT-002 v1 原样保留，用于解释初始判断当时为何形成；v2 是当前版本。",
+        "unknowns": [
+          "SYN-F2 是否仍覆有保护膜"
+        ]
+      }
+    },
+    {
+      "evidence_id": "E-NEW-003",
+      "version": 1,
+      "effective_at": "2026-03-21T10:00:00Z",
+      "available_at": "2026-03-22T08:00:00Z",
+      "source_id": "SRC-SYN-LAB-RESULT",
+      "status": "FAILED",
+      "content": {
+        "attempt": "尝试鉴别擦布痕迹成分时，虚构仪器自检失败，未产生分析结果。",
+        "result": "UNKNOWN",
+        "failure_rule": "本次失败不是‘未检出’，不能证明痕迹存在或不存在，也不能证明其成因。"
+      }
+    }
+  ]
+}

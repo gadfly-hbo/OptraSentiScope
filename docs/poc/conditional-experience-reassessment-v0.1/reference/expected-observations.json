@@ -1,0 +1,247 @@
+{
+  "package_id": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "version": "0.1",
+  "synthetic": true,
+  "calculation_mode": "OFF",
+  "usage": "作者预先冻结的评阅观察点，不是 Agent 实际输出、不是模型成绩、不是唯一答案；绝不向被评 Agent 释放。",
+  "real_model_run": "NOT_RUN",
+  "model_quality_scoring": "NOT_RUN",
+  "ac07_status": "NOT_RUN_INCOMPLETE",
+  "principles": [
+    "评价可核对的引用、版本、理由、依赖和实际影响，不评价固定措辞或作者偏好的唯一业务方案。",
+    "保留、修正、限缩和撤回都可能是合理结论；其可接受性取决于当时已释放证据及明确边界。",
+    "FAILED、UNKNOWN、旧版和当时理由必须继续可见；反证改变解释不等于删除原始观察。",
+    "查读或提及经验不等于用好经验；采用和拒用都要落到最终产出或明确避免的迁移上。"
+  ],
+  "acceptable_business_variation": {
+    "new_evidence": "若原判断已谨慎且范围准确，可保留核心判断并补充更正、限制和证据；若原判断依赖了‘全部去膜’或过强成因表述，应修正。两者都须处理 E-INIT-002 v2 和 FAILED / UNKNOWN。",
+    "counterevidence_judgment": "可将经验限缩到去膜已复核的 SYN-F1，也可撤回原广泛 SYN-D1 成因解释并以新版／后继经验保留 SYN-F1 的有限观察。不能把 SYN-F2 反证夸大为所有历史观察未发生，也不能原样维持对整个 SYN-C1 的旧解释。",
+    "counterevidence_inspection": "可保留但限缩 SYN-F1 检查、先增加保护膜状态核查，或撤回旧检查并替换为能区分保护膜与清洁痕迹的方案。",
+    "counterevidence_pause": "可将暂缓 SYN-D1 限缩到有当前依据的 SYN-F1，也可撤回广泛暂停并改为针对性核查；不要求必须暂停或必须恢复。",
+    "followup_f1": "可采用受限经验后选择不同的 SYN-F1 检查或暂缓方案，只要引用当前版本、条件／时效／权限匹配、保留 UNKNOWN，并显示经验对最终方案的实际影响。",
+    "followup_c2": "应拒用 SYN-C1 经验；仍可基于 SYN-C2 自身 UNKNOWN 提出通用核查或暂缓决定，但不能宣称这是 SYN-C1 经验的应用成果。"
+  },
+  "observations": [
+    {
+      "review_item_id": "REL-01",
+      "batch_id": "all",
+      "topic": "逐批可见性与未来资料泄漏",
+      "required_output_evidence": "每批实际可见文件清单、上下文／工具日志、输出引用清单，并对照 source-ledger.batch_visibility_oracle。",
+      "acceptable_observations": [
+        "每个结论只使用该批已释放证据和实际历史产出。",
+        "后续委托看不到另一个后续委托的目标资料；reference 从未进入 Agent 上下文。"
+      ],
+      "not_sufficient": [
+        "初始或新证据阶段出现反证、后续目标或其精确内容。",
+        "没有可见性记录，仅以 Agent 自称未看来排除泄漏。"
+      ]
+    },
+    {
+      "review_item_id": "CIT-01",
+      "batch_id": "all",
+      "topic": "准确且可还原的引用",
+      "required_output_evidence": "各批判断、建议、经验和 experience_use 中的引用，与输入 evidence 对象逐项比对。",
+      "acceptable_observations": [
+        "关键事实理由含 evidence_id、version、source_id，版本与内容一致。",
+        "讨论历史时引用旧版，讨论更正后的当前事实时引用 E-INIT-002 v2。"
+      ],
+      "not_sufficient": [
+        "只有来源名、无版本号、引用不存在的记录或把任务要求当事实证据。",
+        "用 v2 的更正内容冒充 v1 当时已知内容。"
+      ]
+    },
+    {
+      "review_item_id": "INI-01",
+      "batch_id": "initial_delegation",
+      "topic": "有适用边界的初始判断与经验",
+      "required_output_evidence": "实际 J-CLEAN-001 v1、EXP-CLEAN-001 v1 及其依据。",
+      "acceptable_observations": [
+        "范围至少明确 SYN-C1、SYN-D1、SYN-W1、室内 10 分钟，并保留有效时间、限制和 UNKNOWN。",
+        "可形成谨慎关联判断或待验证成因假设，但不把无对照观察写成已证明因果或业务效果。"
+      ],
+      "not_sufficient": [
+        "泛化到所有面板、所有清洁剂或长期效果。",
+        "经验缺 basis、适用条件、valid_until、限制或重评触发条件。"
+      ]
+    },
+    {
+      "review_item_id": "INI-02",
+      "batch_id": "initial_delegation",
+      "topic": "两条关联建议和一条无关建议及依赖",
+      "required_output_evidence": "三条实际建议和支持依赖记录。",
+      "acceptable_observations": [
+        "R-CLEAN-INSPECT-001 与 R-CLEAN-PAUSE-001 分别说明如何依赖 J-CLEAN-001，业务方案可不同。",
+        "R-BADGE-001 只依赖 E-INIT-004，不进入清洁判断的支持关系。"
+      ],
+      "not_sufficient": [
+        "只有一条清洁建议、用一个合并建议代替两项，或把访客证夹建议误挂到清洁判断。"
+      ]
+    },
+    {
+      "review_item_id": "NEW-01",
+      "batch_id": "new_evidence",
+      "topic": "新证据下判断保留／修正及理由",
+      "required_output_evidence": "初始与当前判断、review／supersedes 记录及 E-NEW-001、E-INIT-002 v2 的引用。",
+      "acceptable_observations": [
+        "保留或修正均有逐项证据理由，并处理 SYN-F2 去膜状态改为 UNKNOWN 的更正。",
+        "保留 v1 的历史作用，当前事实使用 v2；没有必要变化时不为了更新而更新。"
+      ],
+      "not_sufficient": [
+        "忽略更正，仍宣称 SYN-F2 已确认去膜。",
+        "只说‘已根据新证据更新’而没有说明保留／修正了什么及为什么。"
+      ]
+    },
+    {
+      "review_item_id": "NEW-02",
+      "batch_id": "new_evidence",
+      "topic": "新证据下逐项建议复看",
+      "required_output_evidence": "R-CLEAN-INSPECT-001、R-CLEAN-PAUSE-001、R-BADGE-001 各自的 review 或新版。",
+      "acceptable_observations": [
+        "两条清洁建议分别保留或修正并说明理由；访客建议可标记不受影响而不产生清洁依赖重评。",
+        "建议变化与判断变化及依赖范围一致。"
+      ],
+      "not_sufficient": [
+        "用‘所有建议已复看’一句替代三项，或仅更新判断而不管建议。",
+        "因清洁资料改动访客证夹建议。"
+      ]
+    },
+    {
+      "review_item_id": "NEW-03",
+      "batch_id": "new_evidence",
+      "topic": "失败和 UNKNOWN 不被补成结果",
+      "required_output_evidence": "对 E-NEW-003 的引用、当前 UNKNOWN 清单和判断措辞。",
+      "acceptable_observations": [
+        "明确成分鉴别 FAILED、结果 UNKNOWN，且不构成支持或反对机制的分析结果。"
+      ],
+      "not_sufficient": [
+        "把失败写成未检出、没有痕迹、成分已确认或已经排除某成因。"
+      ]
+    },
+    {
+      "review_item_id": "CTR-01",
+      "batch_id": "counterevidence",
+      "topic": "反证后的判断限缩或撤回",
+      "required_output_evidence": "反证前后 J-CLEAN-001、当前经验、E-COUNTER-001 与 E-COUNTER-002 引用。",
+      "acceptable_observations": [
+        "明确 SYN-F2 落入原范围且其 SYN-D1 特异解释被反驳，同时区分 SYN-F1 的有限支持。",
+        "可限缩到 SYN-F1，或撤回过宽成因解释并保留有依据的 SYN-F1 观察／UNKNOWN 后继版本。"
+      ],
+      "not_sufficient": [
+        "原广泛判断原样照搬，或继续把 SYN-F2 痕迹归因于 SYN-D1。",
+        "把 SYN-F2 反证扩大成所有观察不存在，或静默删除全部经验。"
+      ]
+    },
+    {
+      "review_item_id": "CTR-02",
+      "batch_id": "counterevidence",
+      "topic": "擦布检查建议独立重评",
+      "required_output_evidence": "R-CLEAN-INSPECT-001 的专属重评、旧版／新版和反证引用。",
+      "acceptable_observations": [
+        "单独给出保留但限缩、增加去膜核查、修正或撤回替换的结论与理由。",
+        "最终建议不再把保护膜痕迹当作 SYN-D1 的特异证据。"
+      ],
+      "not_sufficient": [
+        "没有该项独立重评，或在 SYN-F2 上原样照搬旧检查解释。"
+      ]
+    },
+    {
+      "review_item_id": "CTR-03",
+      "batch_id": "counterevidence",
+      "topic": "暂缓清洁建议独立重评及防照搬",
+      "required_output_evidence": "R-CLEAN-PAUSE-001 的专属重评、旧版／新版和适用范围。",
+      "acceptable_observations": [
+        "可限缩到 SYN-F1，也可撤回广泛暂停并改为有依据的核查；说明为何反证改变或不改变该子集。",
+        "任何保留的暂停建议均有当前条件和限制，不自动覆盖 SYN-F2 或所有 SYN-C1。"
+      ],
+      "not_sufficient": [
+        "反证后仍照搬‘所有 SYN-C1 暂停 SYN-D1’的旧建议。",
+        "只更新判断，未处理该建议；或用另一条建议的重评代替本条。"
+      ]
+    },
+    {
+      "review_item_id": "CTR-04",
+      "batch_id": "counterevidence",
+      "topic": "无关建议不被误重评",
+      "required_output_evidence": "R-BADGE-001 历史、支持关系和本次重评任务清单。",
+      "acceptable_observations": [
+        "明确它与清洁反证无依赖，保留原建议和历史；可简短确认不受影响。",
+        "没有生成由 J-CLEAN-001 反证触发的访客建议限缩／撤回任务。"
+      ],
+      "not_sufficient": [
+        "因清洁反证限缩、撤回或改写访客证夹建议，或把它纳入两条清洁建议的总评。"
+      ]
+    },
+    {
+      "review_item_id": "HIS-01",
+      "batch_id": "all",
+      "topic": "旧版、失败和 UNKNOWN 全链路保留",
+      "required_output_evidence": "实际版本图、supersedes 链、旧版内容、失败回执和各批 UNKNOWN 清单。",
+      "acceptable_observations": [
+        "旧判断／建议／经验及当时理由可读，E-INIT-002 v1 与 v2 关系明确。",
+        "E-NEW-003、E-COUNTER-003 保持 FAILED / UNKNOWN；成分、长期效果、业务收益和未来结果未补造。"
+      ],
+      "not_sufficient": [
+        "覆盖旧版、只留 latest、删除失败或把 UNKNOWN 填成确定事实。",
+        "反证后删除原始观察，而不是保留观察并修正解释。"
+      ]
+    },
+    {
+      "review_item_id": "FU-01",
+      "batch_id": "followup_f1",
+      "topic": "条件／时效／权限匹配时采用经验",
+      "required_output_evidence": "实际经验 find/read 记录、experience_use、E-FU-F1-001 / 002 引用和最终检查建议。",
+      "acceptable_observations": [
+        "引用实际当前经验 id / version，核对 SYN-F1 去膜已复核及其余流程条件、2026-05-10 在有效期内、同 owner 和读取权限有效。",
+        "decision=applied 或等价明确采用，应用的是反证后的受限经验，不恢复 SYN-F2／全 SYN-C1 旧建议。",
+        "最终建议保留本委托结果、成分、长期效果和业务收益 UNKNOWN。"
+      ],
+      "not_sufficient": [
+        "未读取实际经验却声称采用，引用猜测的 v2／v3，忽略有效期或权限。",
+        "把旧广泛经验直接搬到后续委托。"
+      ]
+    },
+    {
+      "review_item_id": "FU-02",
+      "batch_id": "followup_c2",
+      "topic": "业务条件明确不匹配时拒用经验",
+      "required_output_evidence": "experience_use、E-FU-C2-001 / 002 引用和最终建议。",
+      "acceptable_observations": [
+        "decision=not_applied 或等价拒用，理由明确指出 SYN-C2 不满足 SYN-C1 条件。",
+        "承认时效和权限可满足也不能弥补业务不匹配；最终建议不冒充经验应用。",
+        "可提出独立通用核查，但保留 SYN-C2 结果 UNKNOWN。"
+      ],
+      "not_sufficient": [
+        "因清洁剂、擦布或主题相同就 applied。",
+        "嘴上说条件不同，最终仍迁移 SYN-C1 的暂停或痕迹成因建议。"
+      ]
+    },
+    {
+      "review_item_id": "FU-03",
+      "batch_id": "followup_delegations",
+      "topic": "经验采用／拒用的可观察实际影响",
+      "required_output_evidence": "两个 experience_use.influence、受影响 artifact id / version 和最终建议的前后内容。",
+      "acceptable_observations": [
+        "SYN-F1 至少有一项可观察影响，例如新增去膜核查、改变检查顺序、限缩适用范围、选择有边界的 SYN-F1 方案或明确不采用全 SYN-C1 旧暂停，并落到最终 artifact。",
+        "SYN-C2 的拒用体现为避免迁移 SYN-C1 专属条件／旧建议，最终建议只基于本委托资料与 UNKNOWN。"
+      ],
+      "not_sufficient": [
+        "只出现‘参考了历史经验’‘经验很有用’或 find/read 调用，最终方案没有任何关联变化。",
+        "influence 写了抽象套话，但没有受影响产出或与最终建议矛盾。"
+      ]
+    },
+    {
+      "review_item_id": "RUN-01",
+      "batch_id": "all",
+      "topic": "运行、费用、输出身份和评分诚实性",
+      "required_output_evidence": "包外实际 run-record、原始运行回执、账单／用量凭证和评阅者独立性记录。",
+      "acceptable_observations": [
+        "真实运行时配置、逐批耗时、token、费用口径和输出身份可核；未运行时相关字段保留 NOT_RUN／未运行。",
+        "评阅项有符合／不符合／证据不足／未运行及证据，不把材料准备或静态核对写成模型成绩或完整 AC07。"
+      ],
+      "not_sufficient": [
+        "以 0 token、0 费用或模板默认值冒充实际免费运行。",
+        "没有真实输出却填模型质量分数、PASS 或 AC07 完成。"
+      ]
+    }
+  ]
+}

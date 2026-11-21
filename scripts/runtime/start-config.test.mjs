@@ -15,6 +15,23 @@ test('start.mjs rejects a non-boolean syntheticTrial flag before launching the h
   assert.equal(result.code,1);assert.match(result.stderr,/INVALID_SYNTHETIC_TRIAL/);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
-test('start.mjs help documents the syntheticTrial flag and exits cleanly',async()=>{
- const result=await run(['--help']);assert.equal(result.code,0);assert.match(result.stdout,/syntheticTrial/);assert.match(result.stdout,/sentiscope-synthetic-trial/);
+test('start.mjs help documents the syntheticTrial flag and source default scope',async()=>{
+ const result=await run(['--help']);assert.equal(result.code,0);assert.match(result.stdout,/syntheticTrial/);assert.match(result.stdout,/sentiscope-synthetic-trial/);assert.match(result.stdout,/goalIncludes/);
+});
+test('start.mjs rejects an incomplete source default policy before launching the harness',async()=>{
+ const root=resolve(project,'.local/start-config-tests',`run-${Date.now()}`);mkdirSync(root,{recursive:true});
+ try{
+  const config=resolve(root,'bad-sources.json');writeFileSync(config,JSON.stringify({resourceDefaults:{sources:{grants:[]}}}));
+  const result=await run(['--config',config,'--runtime-root',resolve(root,'runtime')]);
+  assert.equal(result.code,1);assert.match(result.stderr,/INVALID_SOURCE_DEFAULT_SCOPE/);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+test('start.mjs rejects duplicate source default grant identities',async()=>{
+ const root=resolve(project,'.local/start-config-tests',`run-${Date.now()}`);mkdirSync(root,{recursive:true});
+ try{
+  const grant={sourceId:'shared',directory:'.local/source',grantRevision:1,enabled:true};
+  const config=resolve(root,'duplicate-sources.json');writeFileSync(config,JSON.stringify({resourceDefaults:{sources:{goalIncludes:'synthetic',grants:[grant,grant]}}}));
+  const result=await run(['--config',config,'--runtime-root',resolve(root,'runtime')]);
+  assert.equal(result.code,1);assert.match(result.stderr,/INVALID_SOURCE_GRANT_DUPLICATE/);
+ }finally{rmSync(root,{recursive:true,force:true});}
 });

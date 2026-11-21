@@ -82,8 +82,26 @@ function credentialGrants(value, delegationRequired) {
   if (!Array.isArray(value)) throw new Error('INVALID_CREDENTIAL_GRANTS');
   return value.map(grant => credentialGrant(grant, delegationRequired));
 }
+function sourceGrant(grant) {
+  object(grant, ['sourceId', 'directory', 'grantRevision', 'enabled', 'cacheBody', 'allowHistorical', 'maxFiles', 'maxBytes'], 'SOURCE_GRANT');
+  if (typeof grant.enabled !== 'boolean') throw new Error('INVALID_SOURCE_GRANT_ENABLED');
+  const result = { sourceId: text(grant.sourceId, 'SOURCE_ID'), directory: resolve(project, text(grant.directory, 'SOURCE_DIRECTORY')), grantRevision: integer(grant.grantRevision, 1, Number.MAX_SAFE_INTEGER, 'GRANT_REVISION'), enabled: grant.enabled };
+  for (const field of ['cacheBody', 'allowHistorical']) if (grant[field] !== undefined) {
+    if (typeof grant[field] !== 'boolean') throw new Error(`INVALID_${field}`);
+    result[field] = grant[field];
+  }
+  if (grant.maxFiles !== undefined) result.maxFiles = integer(grant.maxFiles, 1, 1000, 'MAX_FILES');
+  if (grant.maxBytes !== undefined) result.maxBytes = integer(grant.maxBytes, 1, 1048576, 'MAX_BYTES');
+  return result;
+}
+function sourceGrants(value) {
+  if (!Array.isArray(value)) throw new Error('INVALID_DELEGATION_GRANTS');
+  const result = value.map(sourceGrant);
+  if (new Set(result.map(grant => grant.sourceId)).size !== result.length) throw new Error('INVALID_SOURCE_GRANT_DUPLICATE');
+  return result;
+}
 function resourceDefaults(value) {
-  object(value, ['budget', 'modelEgress', 'credentials'], 'RESOURCE_DEFAULTS');
+  object(value, ['budget', 'modelEgress', 'credentials', 'sources'], 'RESOURCE_DEFAULTS');
   const result = {};
   if (value.budget !== undefined) {
     object(value.budget, ['limits', 'durationMs'], 'DEFAULT_BUDGET');
@@ -91,6 +109,13 @@ function resourceDefaults(value) {
   }
   if (value.modelEgress !== undefined) result.modelEgress = modelEgress(value.modelEgress, false);
   if (value.credentials !== undefined) result.credentials = credentialGrants(value.credentials, false);
+  if (value.sources !== undefined) {
+    object(value.sources, ['goalIncludes', 'grants'], 'SOURCE_DEFAULT');
+    const goalIncludes = text(value.sources.goalIncludes, 'SOURCE_DEFAULT_SCOPE');
+    const grants = sourceGrants(value.sources.grants);
+    if (grants.length === 0) throw new Error('INVALID_SOURCE_DEFAULT_GRANTS');
+    result.sources = { goalIncludes, grants };
+  }
   return result;
 }
 
@@ -145,19 +170,7 @@ function hostConfig(path, runtimeRoot) {
     object(input.grants, Object.keys(input.grants), 'GRANTS');
     for (const [delegationId, grants] of Object.entries(input.grants)) {
       text(delegationId, 'GRANT_DELEGATION_ID');
-      if (!Array.isArray(grants)) throw new Error('INVALID_DELEGATION_GRANTS');
-      config.grants[delegationId] = grants.map(grant => {
-        object(grant, ['sourceId', 'directory', 'grantRevision', 'enabled', 'cacheBody', 'allowHistorical', 'maxFiles', 'maxBytes'], 'SOURCE_GRANT');
-        if (typeof grant.enabled !== 'boolean') throw new Error('INVALID_SOURCE_GRANT_ENABLED');
-        const result = { sourceId: text(grant.sourceId, 'SOURCE_ID'), directory: resolve(project, text(grant.directory, 'SOURCE_DIRECTORY')), grantRevision: integer(grant.grantRevision, 1, Number.MAX_SAFE_INTEGER, 'GRANT_REVISION'), enabled: grant.enabled };
-        for (const field of ['cacheBody', 'allowHistorical']) if (grant[field] !== undefined) {
-          if (typeof grant[field] !== 'boolean') throw new Error(`INVALID_${field}`);
-          result[field] = grant[field];
-        }
-        if (grant.maxFiles !== undefined) result.maxFiles = integer(grant.maxFiles, 1, 1000, 'MAX_FILES');
-        if (grant.maxBytes !== undefined) result.maxBytes = integer(grant.maxBytes, 1, 1048576, 'MAX_BYTES');
-        return result;
-      });
+      config.grants[delegationId] = sourceGrants(grants);
     }
   }
   return config;
@@ -215,7 +228,7 @@ function profile(runtimeRoot, sdkRoot, config) {
 async function main() {
   const options = parse(process.argv.slice(2));
   if (options.help) {
-    console.log('node scripts/runtime/start.mjs [--config .local/host.json] [--runtime-root .local/product-runtime] [--sdk-root .local/official-sdk]\nPrivate Host JSON: dataDirectory, owner {enterpriseId,principalId}, port, optional model {provider,model,maxTokens}, intervalSeconds, grants {delegationId: SourceGrant[]}, budgets, modelEgress, credentialGrants, resourceDefaults, auth {operatorTokenHash,maintainerTokenHash,sessionTtlSeconds}, syntheticTrial (boolean).\nResource configuration holds limits and non-secret references only. Credentials stay in data/private/credentials.yaml; no external Provider, network or compute enable flag is supported. syntheticTrial=true registers only the fixed in-process local synthetic adapter (sentiscope-synthetic-trial/synthetic) for loopback trial use and still requires auth; it never enables external model transport.\nAll relative paths resolve from the project. Defaults: port 8766, no model, no sources, no enabled model transport. No installation or inherited DSH configuration.');
+    console.log('node scripts/runtime/start.mjs [--config .local/host.json] [--runtime-root .local/product-runtime] [--sdk-root .local/official-sdk]\nPrivate Host JSON: dataDirectory, owner {enterpriseId,principalId}, port, optional model {provider,model,maxTokens}, intervalSeconds, grants {delegationId: SourceGrant[]}, budgets, modelEgress, credentialGrants, resourceDefaults, auth {operatorTokenHash,maintainerTokenHash,sessionTtlSeconds}, syntheticTrial (boolean).\nresourceDefaults.sources={goalIncludes,grants:SourceGrant[]} preauthorizes only newly created operator delegations whose initial goal contains the fixed scope phrase; explicit per-delegation grants take precedence and revocation is never reset.\nResource configuration holds limits and non-secret references only. Credentials stay in data/private/credentials.yaml; no external Provider, network or compute enable flag is supported. syntheticTrial=true registers only the fixed in-process local synthetic adapter (sentiscope-synthetic-trial/synthetic) for loopback trial use and still requires auth; it never enables external model transport.\nAll relative paths resolve from the project. Defaults: port 8766, no model, no sources, no enabled model transport. No installation or inherited DSH configuration.');
     return;
   }
   process.umask(0o077);

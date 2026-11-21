@@ -1,0 +1,91 @@
+{
+  "package_id": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "batch_id": "initial_delegation",
+  "synthetic": true,
+  "calculation_mode": "OFF",
+  "timezone": "UTC",
+  "available_at": "2026-03-05T09:00:00Z",
+  "delegation": {
+    "delegation_id": "SYN-D-ORIGIN",
+    "goal": "根据当前可见记录形成有适用边界的清洁痕迹判断、两条关联建议、一条无关建议，并沉淀可供后续委托核验的经验。",
+    "required_work": [
+      "形成 J-CLEAN-001 v1，写明结论、适用范围、限制、UNKNOWN、失效条件和逐项证据引用。",
+      "分别形成 R-CLEAN-INSPECT-001 v1 与 R-CLEAN-PAUSE-001 v1；两者可采取不同的有依据业务建议，但都要说明如何依赖 J-CLEAN-001。",
+      "形成 R-BADGE-001 v1，只依据访客用品记录，不得把它登记为 J-CLEAN-001 的关联建议。",
+      "按 00-scenario.json 的条件发布 EXP-CLEAN-001 v1，关联实际判断和证据，保留有效时间、限制和重评触发条件。",
+      "为两条清洁建议声明各自的支持依赖；无关建议单独说明依据，不虚构依赖关系。"
+    ],
+    "recommendation_slots": [
+      {
+        "recommendation_id": "R-CLEAN-INSPECT-001",
+        "topic": "是否以及如何在原适用范围内增设清洁后擦布痕迹检查",
+        "expected_relation": "depends_on J-CLEAN-001"
+      },
+      {
+        "recommendation_id": "R-CLEAN-PAUSE-001",
+        "topic": "是否以及在何种范围内暂缓使用 SYN-D1 并等待核查",
+        "expected_relation": "depends_on J-CLEAN-001"
+      },
+      {
+        "recommendation_id": "R-BADGE-001",
+        "topic": "缺失访客证夹的独立处理建议",
+        "expected_relation": "independent_from J-CLEAN-001"
+      }
+    ],
+    "not_required": "不要求唯一业务选择，不要求暂停或继续 SYN-D1 的固定答案，不执行任何操作。"
+  },
+  "evidence": [
+    {
+      "evidence_id": "E-INIT-001",
+      "version": 1,
+      "effective_at": "2026-03-02T08:00:00Z",
+      "available_at": "2026-03-02T09:00:00Z",
+      "source_id": "SRC-SYN-OPS-LOG",
+      "status": "RECORDED",
+      "content": {
+        "text": "本次委托只涉及 SYN-C1 涂层面板、SYN-D1 清洁剂、SYN-W1 擦布和室内清洁后静置 10 分钟的观察流程。",
+        "scope_note": "该流程说明不证明其他涂层、清洁剂、擦布或观察时长具有相同表现。"
+      }
+    },
+    {
+      "evidence_id": "E-INIT-002",
+      "version": 1,
+      "effective_at": "2026-03-02T08:10:00Z",
+      "available_at": "2026-03-02T09:10:00Z",
+      "source_id": "SRC-SYN-OPS-LOG",
+      "status": "RECORDED",
+      "content": {
+        "text": "当班人工勾选记录将 SYN-F1 与 SYN-F2 两个面板批次都写为‘保护膜已移除’。",
+        "field_origin": "人工勾选；本版没有独立复核附件。"
+      }
+    },
+    {
+      "evidence_id": "E-INIT-003",
+      "version": 1,
+      "effective_at": "2026-03-03T10:00:00Z",
+      "available_at": "2026-03-04T08:00:00Z",
+      "source_id": "SRC-SYN-OPS-LOG",
+      "status": "OBSERVED",
+      "content": {
+        "text": "在上述流程后，记录员在 SYN-F1 与 SYN-F2 的擦布上均看到浅色痕迹。",
+        "controls": "未做清水对照，也未做成分鉴别。",
+        "unknowns": [
+          "痕迹是否由 SYN-D1 导致仍为 UNKNOWN",
+          "长期效果与实际操作收益仍为 UNKNOWN"
+        ]
+      }
+    },
+    {
+      "evidence_id": "E-INIT-004",
+      "version": 1,
+      "effective_at": "2026-03-03T11:00:00Z",
+      "available_at": "2026-03-03T11:30:00Z",
+      "source_id": "SRC-SYN-BADGE-LOG",
+      "status": "RECORDED",
+      "content": {
+        "text": "访客用品盒中缺少两枚备用证夹，记录员建议将其列入普通办公用品补充清单。",
+        "relation_note": "该记录不涉及面板、清洁流程或清洁痕迹判断。"
+      }
+    }
+  ]
+}

@@ -10,6 +10,7 @@ export interface SourceGrant {
   sourceId: string; directory: string; grantRevision: number; enabled: boolean;
   cacheBody?: boolean; allowHistorical?: boolean; maxFiles?: number; maxBytes?: number;
 }
+export interface SourceDefaultPolicy { goalIncludes: string; grants: readonly SourceGrant[] }
 export interface SourceRecord {
   ref: string; sourceId: string; relativePath: string; version: string; hash: string; bytes: number;
   sourceModifiedAt: string; observedAt: string; grantRevision: number;
@@ -57,6 +58,9 @@ export class SourceStore {
       CREATE TABLE IF NOT EXISTS source_grants (namespace TEXT NOT NULL, source_id TEXT NOT NULL, config TEXT NOT NULL,
         status TEXT NOT NULL, checked_at TEXT, reason TEXT, revision INTEGER NOT NULL, config_pending INTEGER NOT NULL,
         PRIMARY KEY(namespace,source_id));
+      CREATE TABLE IF NOT EXISTS source_default_grants (namespace TEXT NOT NULL, source_id TEXT NOT NULL, config TEXT NOT NULL,
+        PRIMARY KEY(namespace,source_id));
+      CREATE TABLE IF NOT EXISTS source_default_scopes (namespace TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS source_documents (namespace TEXT NOT NULL, ref TEXT NOT NULL, metadata TEXT NOT NULL, body TEXT,
         PRIMARY KEY(namespace,ref));
       CREATE TABLE IF NOT EXISTS source_cursors (namespace TEXT NOT NULL, source_id TEXT NOT NULL, path TEXT NOT NULL,
@@ -101,11 +105,12 @@ export class SourceStore {
       cacheBody: input.cacheBody ?? false, allowHistorical: input.allowHistorical ?? false, maxFiles, maxBytes };
   }
   /** Host-only configuration, not an Agent tool. Removing a grant is a revocation. */
-  configureGrants(inputs: readonly SourceGrant[]): void {
-    this.#scope(); const grants = inputs.map((input) => this.#normal(input));
+  configureGrants(inputs: readonly SourceGrant[], options: { markDefault?: boolean } = {}): void {
+    this.#scope(); const grants = inputs.map((input) => this.#normal(input)), marked = new Set(inputs.map(input => input.sourceId));
     if (new Set(grants.map((grant) => grant.sourceId)).size !== grants.length) throw new StoreError('invalid_source_grant', '来源标识不能重复。');
     this.#store.withTransaction(() => {
       let changed = false; const prior = this.#rows();
+      const priorDefaults = this.#store.connection.prepare('SELECT source_id,config FROM source_default_grants WHERE namespace=?').all(this.#ns) as unknown as { source_id: string; config: string }[];
       for (const row of prior) if (!grants.some((grant) => grant.sourceId === row.source_id)) {
         const old = JSON.parse(row.config) as NormalGrant;
         grants.push(old.enabled ? { ...old, enabled: false, grantRevision: old.grantRevision + 1 } : old);
@@ -118,8 +123,30 @@ export class SourceStore {
           ON CONFLICT(namespace,source_id) DO UPDATE SET config=excluded.config,status=excluded.status,reason=NULL,config_pending=1`).run(this.#ns, grant.sourceId, config, grant.enabled ? 'pending' : 'revoked');
         changed = true;
       }
+      for (const old of priorDefaults) {
+        const next = grants.find(grant => grant.sourceId === old.source_id);
+        if (!next || JSON.stringify(next) !== old.config) this.#store.connection.prepare('DELETE FROM source_default_grants WHERE namespace=? AND source_id=?').run(this.#ns, old.source_id);
+      }
+      if (options.markDefault) {
+        this.#store.connection.prepare('INSERT OR IGNORE INTO source_default_scopes VALUES (?)').run(this.#ns);
+        for (const grant of grants) if (marked.has(grant.sourceId)) this.#store.connection.prepare('INSERT OR REPLACE INTO source_default_grants VALUES (?,?,?)').run(this.#ns, grant.sourceId, JSON.stringify(grant));
+      }
       if (changed) this.#store.connection.prepare('UPDATE source_scopes SET grants_epoch=grants_epoch+1,qualification_epoch=qualification_epoch+1 WHERE namespace=?').run(this.#ns);
     });
+  }
+  applyDefaultGrants(inputs: readonly SourceGrant[]): void { this.configureGrants(inputs, { markDefault: true }); }
+  hasDefaultPolicyHistory(): boolean { this.#scope(); return Boolean(this.#store.connection.prepare('SELECT namespace FROM source_default_scopes WHERE namespace=?').get(this.#ns)); }
+  reconcileDefaultGrants(inputs: readonly SourceGrant[], preserve: boolean): void {
+    this.#scope();
+    const expected = new Map(inputs.map(input => [input.sourceId, JSON.stringify(this.#normal(input))]));
+    const recorded = new Map((this.#store.connection.prepare('SELECT source_id,config FROM source_default_grants WHERE namespace=?').all(this.#ns) as unknown as { source_id: string; config: string }[]).map(row => [row.source_id, row.config]));
+    if (recorded.size === 0) return;
+    const keep: NormalGrant[] = [];
+    for (const row of this.#rows()) {
+      const current = JSON.parse(row.config) as NormalGrant, original = recorded.get(row.source_id);
+      if (!original || row.config !== original || expected.get(row.source_id) === original && preserve) keep.push(current);
+    }
+    this.configureGrants(keep);
   }
   grantsRevision(): number { this.#scope(); return (this.#store.connection.prepare('SELECT grants_epoch AS n FROM source_scopes WHERE namespace=?').get(this.#ns) as { n: number }).n; }
   sourceIds(): string[] { this.#scope(); return this.#rows().map(row => row.source_id); }

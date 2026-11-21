@@ -1,0 +1,78 @@
+{
+  "package_id": "POC-CONDITIONAL-EXPERIENCE-REASSESSMENT-001",
+  "version": "0.1",
+  "package_status": "FIXED_CANDIDATE",
+  "synthetic": true,
+  "synthetic_declaration": "全部主体、证据、失败、权限和事件均为人工合成；不含真实企业宣称、真实来源、凭据、模型输出或业务操作结果。",
+  "calculation_mode": "OFF",
+  "timezone": "UTC",
+  "real_model_run": "NOT_RUN",
+  "model_quality_scoring": "NOT_RUN",
+  "ac07_status": "NOT_RUN_INCOMPLETE",
+  "hash_algorithm": "sha256",
+  "bytes_definition": "文件原始字节数",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 4645,
+      "sha256": "f6981565168c2b42535f8e4e59c909413ce5f76a49fc812187c6eb18ebc7af8f"
+    },
+    {
+      "path": "inputs/00-scenario.json",
+      "bytes": 3690,
+      "sha256": "350d944b6ffdb8c53a7103d1b0444060745b9b7b62cff668fabbcebd5be8e4d1"
+    },
+    {
+      "path": "inputs/01-initial-delegation.json",
+      "bytes": 3943,
+      "sha256": "840775c2c5f4d11b2e0a0724058751b9873fabf44c09c1f68d28b5066a7627c8"
+    },
+    {
+      "path": "inputs/02-new-evidence.json",
+      "bytes": 3114,
+      "sha256": "809617dca6e15cf8016c5b94ce3bd76714954cb1e59f71b2dc29f0f73da7f99f"
+    },
+    {
+      "path": "inputs/03-counterevidence.json",
+      "bytes": 3456,
+      "sha256": "53c9b2ddcb30a3f17b30643526e89e0a0f44b9f43ac5ec424ddaa60380d18359"
+    },
+    {
+      "path": "inputs/04-followup-f1.json",
+      "bytes": 2833,
+      "sha256": "6034f007c0130e47943b61fea51e78d93cc7a7357bc54a500815a65104cb2846"
+    },
+    {
+      "path": "inputs/05-followup-c2.json",
+      "bytes": 2656,
+      "sha256": "baab22e4a28d01f41440826d6e2367290c835eb7f7fe08b39f0295bed6f0b087"
+    },
+    {
+      "path": "reference/expected-observations.json",
+      "bytes": 13875,
+      "sha256": "84678a2a44871b4ffb664835bac68e5f8f9c317dbb3bda7b009074d5498a12ef"
+    },
+    {
+      "path": "reference/review-sheet.md",
+      "bytes": 6815,
+      "sha256": "7eff79ae0c32139b18dc26593646a7815b44d9190f3b1014c826999a73b51646"
+    },
+    {
+      "path": "reference/run-record.json",
+      "bytes": 11099,
+      "sha256": "023be60339a3f4cb36f008777da90f2b58395c030bebec043e873d8e1c2bd1e1"
+    },
+    {
+      "path": "reference/source-ledger.json",
+      "bytes": 14666,
+      "sha256": "8664d20f81f55350b8d1ea85491d171210c44149010d728f9ada076c473ac352"
+    },
+    {
+      "path": "release-plan.json",
+      "bytes": 6175,
+      "sha256": "3899189ba4e29c622c05813cb45142689ff3dd01b510672da943061f549b66e7"
+    }
+  ],
+  "file_count_excluding_manifest": 12,
+  "manifest_self_excluded": true
+}

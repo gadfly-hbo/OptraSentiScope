@@ -184,7 +184,7 @@ test('UTF-8 allowlist, total byte and file limits reject partial snapshots witho
     rmSync(join(f.source, 'bad.json')); writeFileSync(join(f.source, 'binary.pdf'), 'ignored'); writeFileSync(join(f.source, '.private.md'), 'hidden');
     const events = await f.sources.scan(() => {});
     assert.deepEqual(events.filter((event) => event.kind === 'created').map((event) => event.record!.relativePath), ['a.md']);
-    assert.equal(JSON.stringify(events).includes('1234'), false);
+    assert.equal(events.some((event) => Object.hasOwn(event, 'text') || Object.hasOwn(event.record ?? {}, 'text')), false);
     assert.equal(JSON.stringify(events).includes(f.source), false);
   } finally { f.close(); }
 });
