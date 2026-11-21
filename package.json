@@ -10,7 +10,7 @@
     "start": "node src/main.ts",
     "test": "node --test test/*.test.ts runtime/*.test.mjs scripts/runtime/prepare.test.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "node scripts/runtime/check-prepare.mjs && node scripts/check-runtime-boundary.mjs && npm run typecheck && npm test && node --check src/web/app.js && node --check scripts/check-ui.mjs && node --check scripts/runtime/start.mjs && node --check scripts/runtime/engineering-probe.mjs && node --check scripts/runtime/native-probe.mjs && node --check scripts/sdk/verify.mjs && node --check scripts/sdk/root-probe.mjs && node --check scripts/sdk/native-probe.mjs && npm run check:native && npm run check:research && npm run check:sources && npm run check:recovery && npm run check:longstream && npm run check:host-controls && npm run check:artifact-followup && npm run check:artifact-cold && npm run check:operator-decisions && npm run check:notifications && npm run check:outcomes && npm run check:effect-assessments && npm run check:cognition-reassessment && npm run check:experiences",
+    "check": "node scripts/runtime/check-prepare.mjs && node scripts/check-runtime-boundary.mjs && npm run typecheck && npm test && node --check src/web/app.js && node --check scripts/check-ui.mjs && node --check scripts/runtime/start.mjs && node --check scripts/runtime/engineering-probe.mjs && node --check scripts/runtime/native-probe.mjs && node --check scripts/sdk/verify.mjs && node --check scripts/sdk/root-probe.mjs && node --check scripts/sdk/native-probe.mjs && npm run check:native && npm run check:research && npm run check:sources && npm run check:recovery && npm run check:legacy-recovery && npm run check:longstream && npm run check:host-controls && npm run check:artifact-followup && npm run check:artifact-cold && npm run check:operator-decisions && npm run check:notifications && npm run check:outcomes && npm run check:effect-assessments && npm run check:cognition-reassessment && npm run check:experiences",
     "check:ui": "node scripts/check-ui.mjs",
     "check:sdk": "node scripts/sdk/verify.mjs",
     "setup:sdk": "node scripts/runtime/prepare.mjs --install-missing",
@@ -19,6 +19,7 @@
     "check:sources": "node scripts/check-shared-sources.mjs",
     "check:native": "node scripts/check-research.mjs --native",
     "check:recovery": "node scripts/check-recovery.mjs",
+    "check:legacy-recovery": "SENTISCOPE_LEGACY_PROJECT=\"$PWD/.local/legacy-6ec330d\" node scripts/check-recovery.mjs",
     "check:longstream": "node scripts/check-longstream.mjs",
     "check:host-controls": "node scripts/check-host-controls.mjs",
     "check:artifact-followup": "node scripts/check-artifact-followup.mjs",
@@ -34,7 +35,8 @@
     "check:experiences": "node scripts/check-experiences.mjs",
     "check:effect-ui": "node scripts/check-effect-ui.mjs",
     "check:general-ui": "node scripts/check-general-ui.mjs",
-    "check:lifecycle-ui": "node scripts/check-lifecycle-ui.mjs"
+    "check:lifecycle-ui": "node scripts/check-lifecycle-ui.mjs",
+    "check:revocation-ui": "node scripts/check-revocation-ui.mjs"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

@@ -139,7 +139,7 @@ export async function apply(ctx, config) {
       }
       let detail = await request(`/api/delegations/${id}`);
       assert.equal(detail.sources.find(source => source.sourceId === grant.sourceId)?.status, 'ready');
-      assert.equal(detail.sourceEvents.length, prior.sourceEventCount, 'Restored source cursor does not replay already received pages');
+      if (prior.sourceEventCount !== undefined) assert.equal(detail.sourceEvents.length, prior.sourceEventCount, 'Restored source cursor does not replay already received pages');
       for (const original of prior.schedules) {
         const schedule = await ctx.schedule.view({ id: original.id });
         assert.equal(schedule.target.sessionId, original.target.sessionId);

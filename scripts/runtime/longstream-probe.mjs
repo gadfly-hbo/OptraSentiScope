@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import {writeFileSync,mkdtempSync,readdirSync,statSync,existsSync} from 'node:fs';
-import {resolve,join} from 'node:path';
+import {writeFileSync,mkdtempSync,readdirSync,statSync,existsSync,readFileSync} from 'node:fs';
+import {resolve,join,basename} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash,randomUUID} from 'node:crypto';
 import {LlmAdapter,ToolCallId} from '@deepseek-ai/dsh-llm';
@@ -29,10 +29,10 @@ class Synthetic extends LlmAdapter{
 export const name='sentiscope-longstream-engineering-check';
 export const inject=['agents','agentLoop','sessions','sessionPersistence','schedule','llm','tools','credentials'];
 const wait=async(fn,label,timeout=80000)=>{const end=Date.now()+timeout;while(Date.now()<end){if(await fn())return;await new Promise(r=>setTimeout(r,40));}throw new Error(`Timed out: ${label}`);};
-function directoryBytes(directory){if(!existsSync(directory))return 0;let bytes=0;for(const entry of readdirSync(directory,{withFileTypes:true})){const path=join(directory,entry.name);if(entry.isDirectory())bytes+=directoryBytes(path);else if(entry.isFile())bytes+=statSync(path).size;}return bytes;}
-function regression(samples){const xs=[],ys=[];for(let index=1;index<samples.length;index++){xs.push(samples[index].evidenceBytes-samples[index-1].evidenceBytes);ys.push(samples[index].nativeBytes-samples[index-1].nativeBytes);}assert.ok(ys.every(value=>value>0),'Native session bytes must increase for every evidence batch');const mean=x=>x.reduce((a,b)=>a+b,0)/x.length,mx=mean(xs),my=mean(ys),cov=xs.reduce((sum,x,i)=>sum+(x-mx)*(ys[i]-my),0),vx=xs.reduce((sum,x)=>sum+(x-mx)**2,0),vy=ys.reduce((sum,y)=>sum+(y-my)**2,0);assert.ok(vx>0&&vy>0);const slope=cov/vx,r2=cov*cov/(vx*vy);return{slope,r2,deltas:xs.map((x,i)=>({evidenceBytes:x,nativeBytes:ys[i]}))};}
+function files(directory){if(!existsSync(directory))return[];const output=[];for(const entry of readdirSync(directory,{withFileTypes:true})){const path=join(directory,entry.name);if(entry.isDirectory())output.push(...files(path));else if(entry.isFile())output.push(path);}return output;}
+function regression(samples){const xs=[],ys=[];for(let index=1;index<samples.length;index++){xs.push(samples[index].evidenceBytes-samples[index-1].evidenceBytes);ys.push(samples[index].writeBytes-samples[index-1].writeBytes);}assert.ok(ys.every(value=>value>0),'Actual cumulative write bytes must increase for every evidence batch');const mean=x=>x.reduce((a,b)=>a+b,0)/x.length,mx=mean(xs),my=mean(ys),cov=xs.reduce((sum,x,i)=>sum+(x-mx)*(ys[i]-my),0),vx=xs.reduce((sum,x)=>sum+(x-mx)**2,0),vy=ys.reduce((sum,y)=>sum+(y-my)**2,0);assert.ok(vx>0&&vy>0);const slope=cov/vx,r2=cov*cov/(vx*vy);return{slope,r2,deltas:xs.map((x,i)=>({evidenceBytes:x,writeBytes:ys[i]}))};}
 export async function apply(ctx,config){
- const result={status:'FAIL',scope:'Official native JSONL session files and business evidence; incremental synthetic source batches; no real model or enterprise data',checks:[]};let host,adapter;
+ const result={status:'FAIL',scope:'Observed FileHandle.writeFile bytes, append-only Session prefixes, storage writes and exact native content readback; isolated synthetic Provider only',checks:[]};let host,adapter;
  try{
   adapter=new Synthetic();ctx.llm.registerAdapter(['sentiscope-longstream-only'],adapter);
   const owner={enterpriseId:'longstream-engineering',principalId:'operator'};
@@ -41,24 +41,35 @@ export async function apply(ctx,config){
   const created=await fetch(`${host.url}/api/delegations`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal:'Longstream synthetic append and readback check',boundary:'Synthetic only',idempotencyKey:'longstream-create'})});assert.equal(created.status,201);const id=(await created.json()).delegation.id;
   host.coordinator.configureSources(id,[{sourceId:'longstream',directory:source,grantRevision:1,enabled:true}]);await host.coordinator.sync(id);await wait(()=>host.coordinator.detail(id).artifacts.length>0,'initial native evidence report');
   const flush=async()=>{const rows=host.store.connection.prepare('SELECT value FROM research_runs WHERE delegation_id=?').all(id);for(const sessionId of new Set(rows.map(row=>JSON.parse(row.value).sessionId))){const agent=ctx.agents.get(sessionId);if(agent)await ctx.sessions.flush(agent.session);}};
-  const sample=async batchEvents=>{await flush();const evidence=host.store.connection.prepare("SELECT (SELECT coalesce(sum(length(CAST(payload AS BLOB))),0) FROM source_events)+(SELECT coalesce(sum(length(CAST(value AS BLOB))),0) FROM research_reports) AS bytes").get();return{batchEvents,evidenceBytes:Number(evidence.bytes),nativeBytes:directoryBytes(resolve(config.root,'data/sessions')),storageBytes:directoryBytes(resolve(config.root,'data/storage'))};};
-  const samples=[await sample(0)];let sequence=0,lastMarker='';
+  const readMeter=()=>existsSync(config.meter)?readFileSync(config.meter,'utf8').split('\n').filter(Boolean).map(line=>JSON.parse(line)):[];
+  const previousFiles=new Map();let previousWriteIndex=0,prefixChecks=0,appendFlagChecks=0;const failedWrites=[];
+  const verifyWrites=()=>{
+   const records=readMeter(),current=new Map(files(resolve(config.root,'data/sessions')).filter(path=>basename(path).endsWith('.jsonl')).map(path=>[path,readFileSync(path)]));
+   for(const record of records.slice(previousWriteIndex)){
+    if(!record.success){failedWrites.push(record);continue;}
+    if(record.path.includes('/sessions/')&&record.path.endsWith('.jsonl')&&previousFiles.has(record.path)){assert.equal(record.flags,'a',`Existing Session writes must be append-only: ${record.path}`);appendFlagChecks++;}
+   }
+   for(const [path,before] of previousFiles){const after=current.get(path);assert.ok(after,`Persisted Session must remain readable: ${path}`);assert.ok(after.length>=before.length&&after.subarray(0,before.length).equals(before),`Session prefix changed or history was rewritten: ${path}`);prefixChecks++;}
+   previousFiles.clear();for(const [path,bytes] of current)previousFiles.set(path,bytes);previousWriteIndex=records.length;return records;
+  };
+  const sample=async batchEvents=>{await flush();const records=verifyWrites(),evidence=host.store.connection.prepare("SELECT (SELECT coalesce(sum(length(CAST(payload AS BLOB))),0) FROM source_events)+(SELECT coalesce(sum(length(CAST(value AS BLOB))),0) FROM research_reports) AS bytes").get(),successful=records.filter(record=>record.success),sessionWriteBytes=successful.filter(record=>record.path.includes('/sessions/')).reduce((sum,record)=>sum+record.bytes,0),storageWriteBytes=successful.filter(record=>record.path.includes('/storage/')).reduce((sum,record)=>sum+record.bytes,0);return{batchEvents,evidenceBytes:Number(evidence.bytes),sessionWriteBytes,storageWriteBytes,writeBytes:sessionWriteBytes+storageWriteBytes,writeCount:successful.length};};
+  const samples=[await sample(0)],expectedMarkers=['initial synthetic evidence'];let sequence=0,lastMarker='';
   for(const batch of [1,2,4,8]){
    for(let index=0;index<batch;index++){
-    sequence++;lastMarker=`event-${String(sequence).padStart(2,'0')}-${'x'.repeat(96)}`;writeFileSync(fact,lastMarker);await host.coordinator.sync(id);
-    await wait(()=>host.coordinator.detail(id).artifacts.some(artifact=>artifact.summary.includes(lastMarker)),`source event ${sequence}`);
+    sequence++;lastMarker=`event-${String(sequence).padStart(2,'0')}-${'x'.repeat(96)}`;expectedMarkers.push(lastMarker);writeFileSync(fact,lastMarker);await host.coordinator.sync(id);
+    await wait(()=>host.coordinator.detail(id).artifacts.some(artifact=>artifact.summary?.includes(lastMarker)),`source event ${sequence}`);
    }
    samples.push(await sample(batch));
   }
-  const fit=regression(samples);result.samples=samples;result.fit=fit;assert.ok(fit.r2>=0.8,`Native byte growth must remain linear with persisted evidence volume: ${JSON.stringify(fit)}`);
+  result.samples=samples;const fit=regression(samples);result.fit=fit;assert.ok(fit.r2>=0.8,`Actual cumulative write bytes must remain linear with persisted evidence volume: ${JSON.stringify(fit)}`);assert.deepEqual(failedWrites,[],'No failed or partial write attempt may be hidden in this run');
   const detail=host.coordinator.detail(id),documentEvents=detail.sourceEvents.filter(event=>['created','updated'].includes(event.kind));assert.equal(documentEvents.length,16);assert.equal(detail.artifacts.length,16);
   const eventCountBefore=detail.sourceEvents.length;await host.coordinator.sync(id);assert.equal(host.coordinator.detail(id).sourceEvents.length,eventCountBefore,'Repeated delivery must not append duplicate evidence');
   const runs=host.store.connection.prepare('SELECT value FROM research_runs WHERE delegation_id=?').all(id).map(row=>JSON.parse(row.value)),facts=host.store.connection.prepare("SELECT kind,detail FROM research_facts WHERE delegation_id=? AND kind IN ('native_created','native_resumed')").all(id).map(row=>({kind:row.kind,...JSON.parse(row.detail)}));
-  const materialized=runs.filter(run=>facts.some(fact=>fact.role===run.binding.role&&fact.generation===run.binding.generation)),sessionIds=[...new Set(materialized.map(run=>run.sessionId))];assert.ok(sessionIds.length>=2);let nativeEventCount=0,foundLast=false;
-  for(const sessionId of sessionIds){const reader=await ctx.sessionPersistence.open(sessionId,'read');try{const events=(await reader.read()).events;nativeEventCount+=events.length;if(JSON.stringify(events).includes(lastMarker))foundLast=true;}finally{await reader.close();}}
-  assert.ok(nativeEventCount>sequence);assert.ok(foundLast,'The final evidence body is fully readable from an exact original native Session');
+  const materialized=runs.filter(run=>facts.some(fact=>fact.role===run.binding.role&&fact.generation===run.binding.generation)),sessionIds=[...new Set(materialized.map(run=>run.sessionId))];assert.ok(sessionIds.length>=2);let nativeEventCount=0;const nativeReports=[];
+  for(const sessionId of sessionIds){const reader=await ctx.sessionPersistence.open(sessionId,'read');try{const events=(await reader.read()).events;nativeEventCount+=events.length;for(const event of events)if(event.type==='assistant/message')for(const block of event.data.message.content)if(block.type==='tool-call'&&block.name==='report_research')nativeReports.push(JSON.parse(block.arguments));}finally{await reader.close();}}
+  for(const marker of expectedMarkers){const matching=nativeReports.filter(report=>report.summary===`Synthetic longstream report: ${marker}`);assert.equal(matching.length,1,`Each expected source body must have exactly one native report: ${marker}`);assert.equal(matching[0].evidence[0].hash,createHash('sha256').update(marker).digest('hex'),`Native evidence hash must match the exact body: ${marker}`);}
   const finalHash=createHash('sha256').update(lastMarker).digest('hex');assert.equal(detail.sourceReferences[0].hash,finalHash);
-  Object.assign(result,{status:'PASS',delegationId:id,sourceDirectory:source,samples,fit,readback:{sessions:sessionIds.length,nativeEventCount,sourceDocumentEvents:documentEvents.length,researchReports:detail.artifacts.length,finalHash,unmaterializedRunIds:runs.filter(run=>!materialized.includes(run)).map(run=>run.sessionId)},checks:['1/2/4/8 event batches append native session history; byte growth is linear with persisted evidence volume (R² >= 0.8)','Every original native Session is reopened and fully read; final body, exact source hash, all 16 document events and 16 reports are present','A repeated final scan adds no source event or duplicate business effect']});
+  Object.assign(result,{status:'PASS',delegationId:id,sourceDirectory:source,samples,fit,readback:{sessions:sessionIds.length,nativeEventCount,nativeReports:nativeReports.length,sourceDocumentEvents:documentEvents.length,researchReports:detail.artifacts.length,finalHash,prefixChecks,appendFlagChecks,failedWrites,unmaterializedRunIds:runs.filter(run=>!materialized.includes(run)).map(run=>run.sessionId)},checks:['Observed FileHandle.writeFile calls provide cumulative actual bytes for Sessions and storage; 1/2/4/8 evidence batches remain linear (R² >= 0.8)','Every pre-existing Session file keeps an unchanged prefix and existing-file writes use append mode; no failed write attempts','All 16 expected bodies have exactly one native report each with the correct SHA256; every materialized Session is fully read','Repeated final scan adds no source event or duplicate business effect']});
  }catch(error){result.error={message:error.message,stack:error.stack};if(host)result.debug=host.store.connection.prepare('SELECT kind,detail FROM research_facts ORDER BY seq').all();}
  finally{if(host){try{await host.close();}catch(e){result.status='FAIL';result.cleanupError=e.message;}}}
  writeFileSync(config.output,JSON.stringify(result,null,2)+'\n',{flag:'wx'});

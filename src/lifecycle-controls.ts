@@ -85,21 +85,25 @@ export class LifecycleControlsStore {
 }
 
 export interface LifecycleSummaryFact {kind:string;id:string;at?:string;detail?:string;}
-export interface LifecycleSummaryRecord {id:string;kind:'resume'|'end';createdAt:string;since:string;sections:Readonly<Record<string,readonly LifecycleSummaryFact[]>>;}
+export interface LifecycleSummaryRecord {id:string;kind:'resume'|'end';createdAt:string;since:string;epoch?:number;goalRevision?:number;qualification?:'current'|'historical';sections:Readonly<Record<string,readonly LifecycleSummaryFact[]>>;}
 export class LifecycleSummaryStore {
  readonly #store:SentiStore;readonly #owner:Owner;readonly #delegationId:string;
  constructor(store:SentiStore,scope:{owner:Owner;delegationId:string}){
   store.scope(scope.owner,scope.delegationId);this.#store=store;this.#owner=Object.freeze({...scope.owner});this.#delegationId=scope.delegationId;
   store.connection.exec('CREATE TABLE IF NOT EXISTS lifecycle_summaries(delegation_id TEXT NOT NULL,id TEXT NOT NULL,kind TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(delegation_id,kind,id));');
  }
- record(id:string,kind:'resume'|'end',since:string,sections:Readonly<Record<string,readonly LifecycleSummaryFact[]>>):LifecycleSummaryRecord {
+ record(id:string,kind:'resume'|'end',since:string,sections:Readonly<Record<string,readonly LifecycleSummaryFact[]>>,qualification?:{epoch:number;goalRevision:number}):LifecycleSummaryRecord {
   this.#store.scope(this.#owner,this.#delegationId);
   return this.#store.withTransaction(()=>{
    const existing=this.#store.connection.prepare('SELECT value FROM lifecycle_summaries WHERE delegation_id=? AND kind=? AND id=?').get(this.#delegationId,kind,id) as{value:string}|undefined;
    if(existing)return JSON.parse(existing.value) as LifecycleSummaryRecord;
-   const value:LifecycleSummaryRecord={id,kind,since,createdAt:new Date().toISOString(),sections:structuredClone(sections)};
+   const value:LifecycleSummaryRecord={id,kind,since,createdAt:new Date().toISOString(),...(qualification??{}),sections:structuredClone(sections)};
    this.#store.connection.prepare('INSERT INTO lifecycle_summaries VALUES (?,?,?,?)').run(this.#delegationId,id,kind,JSON.stringify(value));return structuredClone(value);
   });
  }
- list():LifecycleSummaryRecord[]{this.#store.scope(this.#owner,this.#delegationId);return this.#store.connection.prepare('SELECT value FROM lifecycle_summaries WHERE delegation_id=? ORDER BY rowid').all(this.#delegationId).map(row=>JSON.parse(row.value as string) as LifecycleSummaryRecord);}
+ list(qualification?:{epoch:number;goalRevision:number}):LifecycleSummaryRecord[]{
+  this.#store.scope(this.#owner,this.#delegationId);const records=this.#store.connection.prepare('SELECT value FROM lifecycle_summaries WHERE delegation_id=? ORDER BY rowid').all(this.#delegationId).map(row=>JSON.parse(row.value as string) as LifecycleSummaryRecord);
+  if(!qualification)return records;
+  return records.map(record=>record.epoch===undefined||record.epoch===qualification.epoch&&record.goalRevision===qualification.goalRevision?record:{...record,qualification:'historical' as const,sections:Object.fromEntries(Object.entries(record.sections).map(([key,facts])=>[key,facts.map(fact=>({kind:fact.kind,id:fact.id,...(fact.at?{at:fact.at}:{})}))]))});
+ }
 }
