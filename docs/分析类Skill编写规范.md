@@ -1,6 +1,6 @@
 # 分析类 Skill 编写规范 v0.1
 
-适用于 Qoder 和 Codex 编写或修订、拟纳入 OptraSentiScope 分析资产的 Skill。编写者提交可冻结的候选包和自检记录。独立测评通过并经用户确认后，由 Codex 接入分析资产。候选由 Codex 编写时，可由同一作者接续。
+适用于拟纳入 OptraSentiScope 分析资产的 Skill。Qoder 提交固定候选包和自检记录，取得用户确认的独立测评回执后负责接入与交付。见[Skill 测评与接入](engineering-workflow.md#skill-测评与接入)。
 
 ## 1. 先定能力和边界
 
