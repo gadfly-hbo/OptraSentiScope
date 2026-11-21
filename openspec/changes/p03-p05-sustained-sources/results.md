@@ -1,6 +1,6 @@
 # P03–P05 结果记录
 
-2026-11-21 开工。当前为 R2/R3 独立复核修复候选：撤权、并发、摘要、写入放大和实际旧版恢复已处理；R02 修正版 UI Demo 获用户确认后已实施本机登录/角色。尚未完成最终独立重验、PR/CI、合并或试用切换。历史 PASS 只按原范围引用，不代替本候选证据。
+2026-11-21 开工。当前候选已通过最终非作者 Spec／Standards 独立复核（R6 PASS），R2–R5 发现全部关闭；R02 修正版 UI Demo 获用户确认后已实施本机登录/角色。尚未完成 PR/CI、合并或试用切换。历史 PASS 只按原范围引用，不代替本候选证据。
 
 ## 基线事实
 
@@ -21,7 +21,7 @@
 | P05 owner/凭据/出口/计算 OFF/SDK | PASS（本机合成边界；生产项 NOT_RUN） | `.local/host-controls-checks/run-1795245935638-260f0873-e4ba-4576-a205-3d34c06f8929/runner-result.json`；含实际官方 Engine worker 的 `run_compute` 拒绝。R02 本机登录/角色见 `test/server-auth.test.ts` 与 `.local/auth-ui-checks/run-8TpADq` |
 | P05 跨版本恢复与长流 | PASS（本机隔离范围） | 崩溃后备份恢复 `.local/recovery-checks/run-1795231389680-d4fbd51a-734f-4aae-bccf-f70002e4486c/result.json`；长流 `.local/longstream-checks/run-1795231877280/runner-result.json` |
 | 完整检查与审计 | PASS（最终候选前） | `npm run check` 全部通过，持久日志 `.local/p03-p05-candidate/full-check-r5.log`；316/316 tests；`npm audit --audit-level=high` PASS，0 vulnerabilities；真实浏览器 U01–U12、登录与撤权路径分别 PASS |
-| 独立复核与四原则最终检查 | NOT_RUN | 固定候选后由全新上下文非作者执行 |
+| 独立复核与四原则最终检查 | PASS | R6 Spec／Standards 均 PASS：`.local/independent/p03-p05-spec-r6/REPORT.md`、`.local/independent/p03-p05-standards-r6/REPORT.md`；R2–R5 发现全部关闭 |
 | PR、两次 CI、合并与试用切换 | NOT_RUN | 已获本轮授权，独立复核后执行 |
 
 ## AC 结果（本阶段合成工程范围）
@@ -94,6 +94,12 @@
 - Standards R5：`.local/independent/p03-p05-standards-r5/REPORT.md` PASS，R4 修复无权限/并发/持久化回归。
 - Spec R5：`.local/independent/p03-p05-spec-r5/REPORT.md` 确认 F-R4-01/02 RESOLVED，但发现遮蔽 followup 依据后 `app.js` 少一层可选链导致默认进展页崩溃，以及测试计数标注滞后。
 - 修复：`version?.content?.title`；撤权浏览器反例扩展为零证据＋followup，零证据单元反例也加入 followup；计数更正为 316/316。待定向重验。
+
+## 独立复核 R6 最终结论
+
+- Spec R6：`.local/independent/p03-p05-spec-r6/REPORT.md` PASS；含 followup 的零证据撤权在 active/paused/ended 真实浏览器均通过，默认进展页与六页签可用、marker 缺席、安全元数据渲染；旧代码 shadow 仍 RED；计数与日志一致。
+- Standards R6：`.local/independent/p03-p05-standards-r6/REPORT.md` PASS；R5 后差异无权限/并发/持久化回归，typecheck、115 测试、26 项独立反例与真实浏览器通过。
+- 四原则专项最终检查随上述独立复核通过：Host 管环境/权限/持久化，Agent 自主研究，官方 SDK 原实现与唯一 Runtime/Schedule 权威保持，新增人工作业仅必要登录/退出。
 
 ## 本轮 RED、修复与 fixture 失败留痕
 
