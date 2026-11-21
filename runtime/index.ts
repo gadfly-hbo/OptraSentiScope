@@ -65,11 +65,15 @@ export interface NativeResearchHandle {
   deliver(message: { readonly id: string; readonly text: string; readonly sourceRefs?: readonly string[] }): Promise<{ readonly messageId: string; readonly accepted: true }>;
   /** Resource causes are native hook cancellations; omission means operator cancellation. */
   cancel(reason?: string): void;
+  /** Abort the active turn without closing future scheduled admission for a research-only pause. */
+  interrupt?(reason?: string): void;
   whenIdle(): Promise<void>;
   /** Closes admission, cancels, awaits quiescence, flushes facts, then disposes the owned native handle. */
   dispose(): Promise<void>;
   createSchedule(request: { readonly title: string; readonly prompt: string; readonly timing: ScheduleTiming }): Promise<ScheduleCatalogEntry>;
   disableSchedule(id: string): Promise<void>;
+  /** Confirm stop, then remove the official task row; the caller persists the returned safe receipt first. */
+  retireSchedule?(id: string): Promise<ScheduleCatalogEntry>;
   listSchedules(): Promise<readonly ScheduleCatalogEntry[]>;
   /** Re-drive only known active native tasks after current main Session restoration; never creates or runs a task. */
   refreshSchedules?(): Promise<void>;

@@ -40,7 +40,7 @@ export async function apply(ctx,config) {
   const req=async(path,body)=>{const response=await fetch(host.url+path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const value=await response.json();assert.ok(response.ok,JSON.stringify(value));return value;};
   const created=await req('/api/delegations',{goal:'Synthetic continuous research goal; engineering transport only.',boundary:'Read only synthetic fixture; no business action.',idempotencyKey:'fixture-create'});const id=created.delegation.id;
   const source=mkdtempSync(join(tmpdir(),'sentiscope-engineering-source-'));result.sourceDirectory=source;writeFileSync(resolve(source,'fact.txt'),'engineering source version one');
-  host.coordinator.configureSources(id,[{sourceId:'fixture',directory:source,grantRevision:1,enabled:true}]);await host.coordinator.sync(id);
+  host.coordinator.configureSources(id,[{sourceId:'fixture',directory:source,grantRevision:1,enabled:true,cacheBody:true,allowHistorical:true}]);await host.coordinator.sync(id);
   await wait(()=>host.coordinator.detail(id).artifacts.some(a=>a.evidence.length),'first exact evidence report');
   let d=await req(`/api/delegations/${id}`);assert.equal(d.research.length,1);assert.ok(d.technical.some(f=>f.kind==='native_read'));assert.ok(d.technical.some(f=>f.kind==='research_report'));
   result.checks.push('HTTP create -> official Engine evaluation/Decision/Ticket/Assignment -> native tools -> exact source version -> explicit saved report, with separate native read/turn facts');
@@ -49,8 +49,8 @@ export async function apply(ctx,config) {
   await wait(()=>host.coordinator.detail(id).artifacts.length>before,'no-new-data scheduled continuation');
   result.checks.push('Actual native recurring Schedule continues the goal without a new user message or new file; Agent chooses note routing to existing worker');
   writeFileSync(resolve(source,'fact.txt'),'engineering source version two');
-  await wait(()=>host.coordinator.detail(id).artifacts.some(a=>a.summary.includes('version two')),'automatic file update through due wake');
-  d=await req(`/api/delegations/${id}`);assert.equal(d.research.length,1);assert.ok(d.artifacts.some(a=>a.summary.includes('version one')));assert.ok(d.artifacts.some(a=>a.qualification==='historical'));
+  await wait(()=>host.coordinator.detail(id).artifacts.some(a=>a.summary?.includes('version two')),'automatic file update through due wake');
+  d=await req(`/api/delegations/${id}`);assert.equal(d.research.length,1);assert.ok(d.artifacts.some(a=>a.summary?.includes('version one')));assert.ok(d.artifacts.some(a=>a.qualification==='historical'));
   result.checks.push('Native due wake discovers changed source automatically; same official Thread fans out to existing ticket, fresh qualified Session uses version two and preserves version-one report');
   const db=host.store;const intents=db.connection.prepare('SELECT state,kind FROM engine_intents').all();assert.ok(intents.some(x=>x.kind==='deliver'&&x.state==='sent'));
   const count=adapter.calls.length;await req(`/api/delegations/${id}/commands`,{kind:'pause',expectedVersion:d.delegation.version,idempotencyKey:'pause'});

@@ -7,7 +7,7 @@ const owner={enterpriseId:'server-lifecycle-enterprise',principalId:'operator'};
 test('research lifecycle and briefing preference commands reach the Host-bound research port',async()=>{
  const store=new SentiStore({filename:':memory:'}),delegation=store.create(owner,{goal:'Synthetic controls',idempotencyKey:'create'});
  const calls:unknown[]=[];
- const host=await startLocalHost({store,owner,port:0,researchPort:{
+ const host=await startLocalHost({ allowUnauthenticated: true, store,owner,port:0,researchPort:{
   status:{status:'unconfigured',message:'Synthetic runtime'},detail:()=>({researchStatus:{status:'unconfigured'}}),changed(){},
   pauseResearch(id,input){calls.push({id,kind:'pause',input});return{revision:1,researchPaused:true,collectionPaused:false,pausedScopes:[input.scope??''],updatedAt:new Date().toISOString()};},
   resumeResearch(id,input){calls.push({id,kind:'resume',input});return{revision:2,researchPaused:false,collectionPaused:false,pausedScopes:[],updatedAt:new Date().toISOString()};},

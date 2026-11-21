@@ -4,8 +4,9 @@ import type {Owner,PendingOperation} from './domain.ts';
 import type {SentiStore} from './store.ts';
 import type {RunBinding} from '../runtime/index.ts';
 
+export interface LifecycleTransition {kind:'pause'|'resume';requestId:string;reason:string;at:string;since:string;}
 export interface LifecycleControlState {
- revision:number;researchPaused:boolean;collectionPaused:boolean;pausedScopes:readonly string[];updatedAt:string;
+ revision:number;researchPaused:boolean;collectionPaused:boolean;pausedScopes:readonly string[];updatedAt:string;lastTransition?:LifecycleTransition;
 }
 export interface PauseResearchInput {expectedRevision:number;mode:'all'|'direction';scope?:string;reason:string;idempotencyKey:string;}
 export interface ResumeResearchInput {expectedRevision:number;scope?:string;reason:string;idempotencyKey:string;}
@@ -36,18 +37,19 @@ export class LifecycleControlsStore {
  pauseResearch(input:PauseResearchInput):LifecycleControlState{
   const raw=object(input,['expectedRevision','mode','scope','reason','idempotencyKey']);const expected=integer(raw.expectedRevision,0),mode=raw.mode==='all'?'all':raw.mode==='direction'?'direction':invalid(),itemScope=scope(raw.scope),reason=text(raw.reason),requestId=text(raw.idempotencyKey,500);
   if(mode==='direction'&&!itemScope)return invalid();const hash=digest({kind:'pause',expected,mode,itemScope,reason});
-  return this.#controlRequest(requestId,hash,()=>{const state=this.#state();if(expected!==state.revision)throw new StoreError('lifecycle_control_conflict','生命周期控制已有新版本。',409);const next={...state,revision:state.revision+1,researchPaused:true,pausedScopes:mode==='all'?[]:[...new Set([...state.pausedScopes,itemScope!])],updatedAt:this.#now()};this.#write(next);return structuredClone(next);});
+  return this.#controlRequest(requestId,hash,()=>{const state=this.#state();if(expected!==state.revision)throw new StoreError('lifecycle_control_conflict','生命周期控制已有新版本。',409);const at=this.#now(),global=mode==='all'||(state.researchPaused&&state.pausedScopes.length===0);const next={...state,revision:state.revision+1,researchPaused:true,pausedScopes:global?[]:[...new Set([...state.pausedScopes,itemScope!])],updatedAt:at,lastTransition:{kind:'pause' as const,requestId,reason,at,since:state.lastTransition?.kind==='pause'?state.lastTransition.since:at}};this.#write(next);return structuredClone(next);});
  }
  resumeResearch(input:ResumeResearchInput):LifecycleControlState{
   const raw=object(input,['expectedRevision','scope','reason','idempotencyKey']);const expected=integer(raw.expectedRevision,0),itemScope=scope(raw.scope),reason=text(raw.reason),requestId=text(raw.idempotencyKey,500);const hash=digest({kind:'resume',expected,itemScope,reason});
-  return this.#controlRequest(requestId,hash,()=>{const state=this.#state();if(expected!==state.revision)throw new StoreError('lifecycle_control_conflict','生命周期控制已有新版本。',409);const pausedScopes=itemScope===undefined?[]:state.pausedScopes.filter(value=>value!==itemScope);const next={...state,revision:state.revision+1,researchPaused:pausedScopes.length>0,pausedScopes,updatedAt:this.#now()};this.#write(next);return structuredClone(next);});
+  return this.#controlRequest(requestId,hash,()=>{const state=this.#state();if(expected!==state.revision)throw new StoreError('lifecycle_control_conflict','生命周期控制已有新版本。',409);const pausedScopes=itemScope===undefined?[]:state.pausedScopes.filter(value=>value.trim().toLowerCase()!==itemScope.trim().toLowerCase()),at=this.#now();const next={...state,revision:state.revision+1,researchPaused:pausedScopes.length>0,pausedScopes,updatedAt:at,lastTransition:{kind:'resume' as const,requestId,reason,at,since:state.lastTransition?.kind==='pause'?state.lastTransition.at:state.updatedAt}};this.#write(next);return structuredClone(next);});
  }
  plans():readonly LifecycleSchedulePlan[]{this.#store.scope(this.#owner,this.#delegationId);return this.#store.connection.prepare('SELECT value FROM lifecycle_schedule_plans WHERE delegation_id=? ORDER BY rowid').all(this.#delegationId).map(row=>JSON.parse(row.value as string));}
  plan(id:string):LifecycleSchedulePlan|undefined{return this.plans().find(item=>item.id===id);}
- schedulePlan(inputBinding:RunBinding,input:{requestId:string;kind:'resume'|'end';at:string;reason:string}):LifecycleSchedulePlan{
-  const raw=object(input,['requestId','kind','at','reason']);const requestId=text(raw.requestId,500),kind=raw.kind==='resume'||raw.kind==='end'?raw.kind:invalid(),at=instant(raw.at),reason=text(raw.reason);if(Date.parse(at)<=Date.parse(this.#now()))throw new StoreError('lifecycle_control_invalid','约定生命周期时间必须在未来。',409);
-  const hash=digest({kind:'schedule',requestId,planKind:kind,at,reason});return this.#store.withTransaction(()=>{
+ schedulePlan(inputBinding:RunBinding,input:{expectedRevision:number;requestId:string;kind:'resume'|'end';at:string;reason:string}):LifecycleSchedulePlan{
+  const raw=object(input,['expectedRevision','requestId','kind','at','reason']);const expected=integer(raw.expectedRevision,0),requestId=text(raw.requestId,500),kind=raw.kind==='resume'||raw.kind==='end'?raw.kind:invalid(),at=instant(raw.at),reason=text(raw.reason);if(Date.parse(at)<=Date.parse(this.#now()))throw new StoreError('lifecycle_control_invalid','约定生命周期时间必须在未来。',409);
+  const hash=digest({kind:'schedule',requestId,expected,planKind:kind,at,reason});return this.#store.withTransaction(()=>{
    const prior=this.#store.connection.prepare('SELECT request_hash,id FROM lifecycle_schedule_requests WHERE delegation_id=? AND request_id=?').get(this.#delegationId,requestId) as{request_hash:string;id:string}|undefined;if(prior){if(prior.request_hash!==hash)throw new StoreError('lifecycle_control_conflict','同一生命周期约定请求不能改写。',409);return this.plan(prior.id)!;}
+   if(expected!==this.#state().revision)throw new StoreError('lifecycle_control_conflict','生命周期控制已有新版本。',409);
    const id=randomUUID(),value:LifecycleSchedulePlan={id,delegationId:this.#delegationId,kind,at,reason,binding:inputBinding,createdAt:this.#now(),updatedAt:this.#now(),status:'pending',schedule:{status:'none'}};this.#store.connection.prepare('INSERT INTO lifecycle_schedule_plans VALUES (?,?,?)').run(this.#delegationId,id,JSON.stringify(value));this.#store.connection.prepare('INSERT INTO lifecycle_schedule_requests VALUES (?,?,?,?)').run(this.#delegationId,requestId,hash,id);return structuredClone(value);
   });
  }
@@ -80,4 +82,28 @@ export class LifecycleControlsStore {
  scheduleUnknown(id:string,sessionId:string):LifecycleSchedulePlan{return this.#store.withTransaction(()=>{const value=this.plan(id);if(!value||value.schedule.sessionId!==sessionId)return value??{...this.plan(id)!};value.status='unknown';value.schedule.status='unknown';this.#writePlan(value);return structuredClone(value);});}
  scheduleStopped(id:string):LifecycleSchedulePlan{return this.#store.withTransaction(()=>{const value=this.plan(id);if(!value||!value.schedule.id)throw new StoreError('lifecycle_control_state','没有准确生命周期调度身份。',409);value.schedule.status='stopped';this.#writePlan(value);return structuredClone(value);});}
  #writePlan(value:LifecycleSchedulePlan){this.#store.connection.prepare('INSERT INTO lifecycle_schedule_plans VALUES (?,?,?) ON CONFLICT(delegation_id,id) DO UPDATE SET value=excluded.value').run(this.#delegationId,value.id,JSON.stringify(value));}
+}
+
+export interface LifecycleSummaryFact {kind:string;id:string;at?:string;detail?:string;}
+export interface LifecycleSummaryRecord {id:string;kind:'resume'|'end';createdAt:string;since:string;epoch?:number;goalRevision?:number;qualification?:'current'|'historical';sections:Readonly<Record<string,readonly LifecycleSummaryFact[]>>;}
+export class LifecycleSummaryStore {
+ readonly #store:SentiStore;readonly #owner:Owner;readonly #delegationId:string;
+ constructor(store:SentiStore,scope:{owner:Owner;delegationId:string}){
+  store.scope(scope.owner,scope.delegationId);this.#store=store;this.#owner=Object.freeze({...scope.owner});this.#delegationId=scope.delegationId;
+  store.connection.exec('CREATE TABLE IF NOT EXISTS lifecycle_summaries(delegation_id TEXT NOT NULL,id TEXT NOT NULL,kind TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(delegation_id,kind,id));');
+ }
+ record(id:string,kind:'resume'|'end',since:string,sections:Readonly<Record<string,readonly LifecycleSummaryFact[]>>,qualification?:{epoch:number;goalRevision:number}):LifecycleSummaryRecord {
+  this.#store.scope(this.#owner,this.#delegationId);
+  return this.#store.withTransaction(()=>{
+   const existing=this.#store.connection.prepare('SELECT value FROM lifecycle_summaries WHERE delegation_id=? AND kind=? AND id=?').get(this.#delegationId,kind,id) as{value:string}|undefined;
+   if(existing)return JSON.parse(existing.value) as LifecycleSummaryRecord;
+   const value:LifecycleSummaryRecord={id,kind,since,createdAt:new Date().toISOString(),...(qualification??{}),sections:structuredClone(sections)};
+   this.#store.connection.prepare('INSERT INTO lifecycle_summaries VALUES (?,?,?,?)').run(this.#delegationId,id,kind,JSON.stringify(value));return structuredClone(value);
+  });
+ }
+ list(qualification?:{epoch:number;goalRevision:number}):LifecycleSummaryRecord[]{
+  this.#store.scope(this.#owner,this.#delegationId);const records=this.#store.connection.prepare('SELECT value FROM lifecycle_summaries WHERE delegation_id=? ORDER BY rowid').all(this.#delegationId).map(row=>JSON.parse(row.value as string) as LifecycleSummaryRecord);
+  if(!qualification)return records;
+  return records.map(record=>record.epoch===undefined||record.epoch===qualification.epoch&&record.goalRevision===qualification.goalRevision?record:{...record,qualification:'historical' as const,sections:Object.fromEntries(Object.entries(record.sections).map(([key,facts])=>[key,facts.map(fact=>({kind:fact.kind,id:fact.id,...(fact.at?{at:fact.at}:{})}))]))});
+ }
 }

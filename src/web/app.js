@@ -5,7 +5,7 @@ const $ = (selector) => document.querySelector(selector);
 const escapeText = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const tabs = [['progress', '进展'], ['plan', '方案与依据'], ['decisions', '待决事项'], ['results', '结果与学习'], ['sources', '资料'], ['conversation', '补充对话']];
 const lifecycleLabels = { active: '进行中', pausing: '正在暂停', paused: '已暂停', resuming: '正在核对恢复资格', ending: '正在结束', ended: '已结束' };
-const state = { delegations: [], runtime: null, detail: null, selectedId: null, tab: 'progress', filter: 'all', reminders: false, loaded: false, connected: false, busy: false, error: '', updatedAt: null, unresolved: null };
+const state = { delegations: [], runtime: null, detail: null, selectedId: null, tab: 'progress', filter: 'all', reminders: false, loaded: false, connected: false, busy: false, error: '', updatedAt: null, unresolved: null, session: null, maintenance: null };
 const drafts = new Map();
 const decisionDrafts = new Map();
 let opener = null;
@@ -17,7 +17,7 @@ function button(action, label, attributes = '') { return `<button data-action="$
 function badge(text, tone = '') { return `<span class="badge ${tone}">${escapeText(text)}</span>`; }
 function title(item) { const line = item.goal.split('\n')[0]; return line.length > 26 ? `${line.slice(0, 26)}…` : line; }
 function time(value) { const date = new Date(value); return value && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(date) : '时间未记录'; }
-function canWrite() { return state.connected && !state.busy && !state.unresolved; }
+function canWrite() { return state.connected && state.session?.role === 'operator' && !state.busy && !state.unresolved; }
 function isEditable(item) { return ['active', 'paused'].includes(item.lifecycle); }
 function records(name) { return Array.isArray(state.detail?.[name]) ? state.detail[name] : []; }
 function pendingDecisions() { return state.delegations.flatMap((delegation) => (Array.isArray(delegation.pendingDecisions) ? delegation.pendingDecisions : []).map((entry) => ({ ...entry, delegationId: delegation.id }))); }
@@ -70,6 +70,7 @@ function currentJudgment() {
 function textList(values, empty = '尚未记录') { return Array.isArray(values) && values.length ? `<ul class="plain-list">${values.map((value) => `<li class="record-body">${escapeText(value)}</li>`).join('')}</ul>` : `<p class="secondary">${escapeText(empty)}</p>`; }
 function evidenceList(evidence) { return Array.isArray(evidence) && evidence.length ? `<ul>${evidence.map((item) => `<li><a href="#delegation/${encodeURIComponent(state.selectedId)}/sources">${escapeText(item.ref)}</a><code class="reference-value">SHA256 ${escapeText(item.hash)}</code></li>`).join('')}</ul>` : '<p class="meta">该版本没有保存来源引用；依据限制以交付内容为准。</p>'; }
 function artifactCard(entry) {
+  if (!entry.content) return `<li class="research-record" tabindex="-1" data-artifact-id="${escapeText(entry.artifactId)}" data-artifact-version="${escapeText(entry.version)}"><div class="record-heading"><h2>历史成果 · 正文待重核</h2>${badge('资格已变化', 'warning')}</div><p class="secondary">来源或目标资格已变化，原方案／判断正文暂不回放；可凭准确版本引用重新核对。</p><p class="meta">${escapeText(entry.artifactId)} · v${escapeText(entry.version)} · ${time(entry.createdAt)}</p></li>`;
   const content = entry.content; const latest = isLatestRevision(entry); const currentVersion = latest && entry.qualification === 'current'; const isPlan = entry.kind === 'plan'; const lifecycle = current()?.lifecycle;
   const label = currentVersion ? lifecycle === 'active' ? '当前版本' : lifecycle === 'ended' ? '最后交付版本 · 委托已结束' : '已保存最新版本' : latest ? '历史成果 · 资格已变化' : '历史版本';
   return `<li class="research-record" tabindex="-1" data-artifact-id="${escapeText(entry.artifactId)}" data-artifact-version="${escapeText(entry.version)}"><div class="record-heading"><h2>${escapeText(content.title)}</h2><div class="actions">${badge(`${isPlan ? '方案' : '判断'} v${entry.version}`)}${badge(label, currentVersion && lifecycle === 'active' ? 'accent' : 'warning')}</div></div><p class="record-body">${escapeText(content.summary)}</p><p class="meta">${time(entry.createdAt)} · 委托 v${escapeText(entry.goalRevision)}${entry.supersedes ? ` · 修订自 v${escapeText(entry.supersedes.version)}` : ''}</p><p class="record-body">修订依据：${escapeText(entry.reason)}</p>${isPlan ? `<div class="section-actions"><h3>建议</h3><p class="record-body">${escapeText(content.recommendation)}</p></div>` : ''}<details class="history-disclosure" data-disclosure="${disclosureKey('artifact', entry.artifactId, entry.version, 'basis')}"><summary>依据、假设与适用条件</summary><div class="report-evidence"><h3>准确依据版本</h3>${evidenceList(content.evidence)}</div><div class="section-actions"><h3>假设</h3>${textList(content.assumptions, '未列额外假设')}</div><div class="section-actions"><h3>仍未知</h3>${textList(content.unknowns, '未列额外未知；不据此推定依据穷尽')}</div><div class="section-actions"><h3>适用范围</h3><p class="record-body">${escapeText(content.applicability)}</p><h3>失效或重评条件</h3>${textList(content.invalidatedBy, '未列额外失效条件')}</div></details>${isPlan ? `<details class="history-disclosure" data-disclosure="${disclosureKey('artifact', entry.artifactId, entry.version, 'plan')}"><summary>备选、约束与观察安排</summary><div class="section-actions"><h3>备选及代价</h3><ul class="plain-list">${(Array.isArray(content.alternatives) ? content.alternatives : []).map((alternative) => `<li><p class="record-body">${escapeText(alternative.option)}</p><p class="record-body">代价：${escapeText(alternative.costs)}</p><p class="record-body">风险：${escapeText(alternative.risks)}</p></li>`).join('')}</ul><h3>约束</h3>${textList(content.constraints, '未列额外约束')}</div><dl class="definition-list section-actions">${[['baseline', '基线'], ['expectedChange', '预期变化'], ['measure', '评价口径'], ['window', '观察窗口'], ['source', '观察来源'], ['check', '检查安排']].map(([field, label]) => `<div><dt>${label}</dt><dd class="record-body">${escapeText(content.observation?.[field] || '尚未记录')}</dd></div>`).join('')}</dl></details>` : ''}<p class="scope-line">${currentVersion && lifecycle === 'active' ? '当前建议仍需核对适用条件，经营取舍由负责人决定。' : '保留当时交付及依据，不作为当前推荐或续作授权。'}</p></li>`;
@@ -84,7 +85,7 @@ function followupCard(entry, item) {
   else label = ({ waiting: entry.trigger?.kind === 'source_event' && !entry.trigger.reviewAt ? '观察中 · 等待来源事件' : entry.schedule?.status === 'active' ? '观察中 · 已安排复查' : '观察安排待核对', due: '复查条件已到 · 尚未记录检查', observed: '已记录本次检查', cancelled: '安排已收束', superseded: '已随版本或资格变化失效' })[entry.status] || '观察状态待核对';
   const version = records('artifactRevisions').find((revision) => revision.artifactId === entry.artifact?.artifactId && revision.version === entry.artifact?.version);
   const timing = entry.trigger?.kind === 'at' ? `${interrupted ? '原定' : ''}复查时点：${time(entry.trigger.at)}` : `来源事件：${(Array.isArray(entry.trigger?.sourceIds) ? entry.trigger.sourceIds : []).join('、')}${entry.trigger?.reviewAt ? `；${interrupted ? '原定' : ''}复查时点：${time(entry.trigger.reviewAt)}` : '；未设置固定复查时间'}`;
-  return `<li><div class="record-heading"><strong>${escapeText(label)}</strong></div><p class="record-body">${escapeText(entry.reason)}</p><p class="meta">${escapeText(version?.content.title || '关联成果')} · v${escapeText(entry.artifact?.version)}<br>${escapeText(timing)}</p>${Array.isArray(entry.dependencies) && entry.dependencies.length ? `<p class="record-body">等待条件：${entry.dependencies.map(escapeText).join('；')}</p>` : ''}${schedulingUnknown ? '<p class="meta">调度回执未确认 · UNKNOWN；原安排和记录保留，等待 Host 核对实际状态。</p>' : entry.schedule?.status === 'stop_pending' ? '<p class="meta">原生定时停止回执尚待核对。</p>' : ''}${entry.observation ? `<p class="record-body">本次检查记录：${escapeText(entry.observation.summary)}</p><p class="meta">${time(entry.observation.at)} · 不据此推定采纳、实际执行或经营效果</p>` : ''}</li>`;
+  return `<li><div class="record-heading"><strong>${escapeText(label)}</strong></div><p class="record-body">${escapeText(entry.reason || '历史观察安排正文待当前资格重核，暂不回放。')}</p><p class="meta">${escapeText(version?.content?.title || '关联成果')} · v${escapeText(entry.artifact?.version)}<br>${escapeText(timing)}</p>${Array.isArray(entry.dependencies) && entry.dependencies.length ? `<p class="record-body">等待条件：${entry.dependencies.map(escapeText).join('；')}</p>` : ''}${schedulingUnknown ? '<p class="meta">调度回执未确认 · UNKNOWN；原安排和记录保留，等待 Host 核对实际状态。</p>' : entry.schedule?.status === 'stop_pending' ? '<p class="meta">原生定时停止回执尚待核对。</p>' : ''}${entry.observation ? `<p class="record-body">本次检查记录：${escapeText(entry.observation.summary)}</p><p class="meta">${time(entry.observation.at)} · 不据此推定采纳、实际执行或经营效果</p>` : ''}</li>`;
 }
 function followupList(item) {
   const entries = records('followups'); if (!entries.length) return '';
@@ -103,7 +104,7 @@ function researchLabel(item) {
   if (item.lifecycle === 'resuming') return '待恢复资格核对';
   if (['paused', 'ended'].includes(item.lifecycle)) return '研究已停止';
   const status = item.research?.status;
-  return ({ not_started: '等待运行资格', unconfigured: '等待研究运行资格', following: '持续跟进已启用', running: '研究执行中', researching: '研究执行中', waiting: '等待信息或研究资源', blocked: '研究受阻', failed: '研究失败', unknown: '研究状态未确认 · UNKNOWN', ready: '本轮研究报告就绪', observing: '有理由观察', idle: '持续跟进中' })[status] || (status ? `研究状态：${status}` : '运行状态待核实');
+  return ({ not_started: '等待运行资格', unconfigured: '等待研究运行资格', paused: '研究已暂停', following: '持续跟进已启用', running: '研究执行中', researching: '研究执行中', waiting: '等待信息或研究资源', blocked: '研究受阻', failed: '研究失败', unknown: '研究状态未确认 · UNKNOWN', ready: '本轮研究报告就绪', observing: '有理由观察', idle: '持续跟进中' })[status] || (status ? `研究状态：${status}` : '运行状态待核实');
 }
 function announce(text) { $('#announcement').textContent = text; }
 function current() { return state.detail?.delegation?.id === state.selectedId ? state.detail.delegation : null; }
@@ -152,17 +153,22 @@ function render() {
   const focusedArtifact = focused?.dataset.artifactId && focused?.dataset.artifactVersion ? { artifactId: focused.dataset.artifactId, version: Number(focused.dataset.artifactVersion) } : null;
   const focusedCard = focused?.closest('[data-artifact-id][data-artifact-version]');
   const focusedCardBefore = focusedCard ? { artifactId: focusedCard.dataset.artifactId, version: focusedCard.dataset.artifactVersion, historical: focusedCard.closest('details[data-disclosure]')?.dataset.disclosure === 'artifact-history' } : null;
-  const item = current();
-  $('#overview-nav').classList.toggle('active', !state.selectedId && !state.reminders);
-  $('#reminders-nav').classList.toggle('active', !state.selectedId && state.reminders);
-  $('#reminder-count').textContent = String(pendingDecisions().length);
-  $('#mandate-nav').innerHTML = state.delegations.length ? state.delegations.map((delegation) => button('open', escapeText(title(delegation)), `class="mandate-nav ${delegation.id === state.selectedId ? 'active' : ''}" data-id="${escapeText(delegation.id)}"`)).join('') : '<p class="meta">暂无委托</p>';
-  $('#connection-status').textContent = state.connected ? `已连接 · ${time(state.updatedAt)}` : state.loaded ? '连接未确认' : '连接中';
+  const item = current(), operator = state.session?.role === 'operator', maintainer = state.session?.role === 'maintainer';
+  $('#overview-nav').disabled = !operator; $('#reminders-nav').disabled = !operator; $('#maintenance-nav').hidden = !maintainer;
+  $('#overview-nav').classList.toggle('active', operator && !state.selectedId && !state.reminders);
+  $('#reminders-nav').classList.toggle('active', operator && !state.selectedId && state.reminders);
+  $('#maintenance-nav').classList.toggle('active', maintainer);
+  $('#logout').hidden = !state.session;
+  $('#reminder-count').textContent = String(operator ? pendingDecisions().length : 0);
+  $('#mandate-nav').innerHTML = operator && state.delegations.length ? state.delegations.map((delegation) => button('open', escapeText(title(delegation)), `class="mandate-nav ${delegation.id === state.selectedId ? 'active' : ''}" data-id="${escapeText(delegation.id)}"`)).join('') : `<p class="meta">${operator ? '暂无委托' : '登录后显示'}</p>`;
+  $('#connection-status').textContent = !state.loaded ? '连接中' : !state.session ? '未登录' : state.connected ? maintainer ? '已连接 · 维护者' : `已连接 · ${time(state.updatedAt)}` : '连接未确认';
   const runtimeMessage = state.runtime?.message || '研究运行环境尚未接通。';
-  $('#service-status').textContent = state.connected ? runtimeMessage : state.loaded ? 'Host 暂时无法确认。下方保留最后可核实状态，尚未确认新的运行事实。' : '正在连接工作台…';
-  $('#service-status').className = `service-status ${state.connected ? ['unconfigured', 'unavailable', 'failed'].includes(state.runtime?.status) ? 'warning' : '' : state.loaded ? 'danger' : ''}`;
+  $('#service-status').textContent = !state.session && state.loaded ? '本机工作台尚未登录。' : state.connected ? runtimeMessage : state.loaded ? 'Host 暂时无法确认。下方保留最后可核实状态，尚未确认新的运行事实。' : '正在连接工作台…';
+  $('#service-status').className = `service-status ${state.connected ? ['unconfigured', 'unavailable', 'failed'].includes(state.runtime?.status) ? 'warning' : '' : state.loaded && state.session ? 'danger' : ''}`;
   let content;
   if (!state.loaded) content = '<div class="empty-state"><h1>正在载入委托</h1><p>正在读取 Host 保存的当前状态。</p></div>';
+  else if (!state.session) content = loginView();
+  else if (maintainer) content = maintenanceView();
   else if (state.selectedId && !item) content = `<div class="empty-state"><h1>委托暂时无法查看</h1><p>请刷新核对当前访问资格和保存状态。</p>${button('refresh', '重新读取', 'class="primary"')}${button('overview', '返回总览')}</div>`;
   else content = item ? detail(item) : overview();
   $('#screen').innerHTML = `${errorNotice()}${content}`;
@@ -215,6 +221,14 @@ function errorNotice() {
   return `<div class="notice danger page-error" role="alert"><strong>${state.unresolved ? '这次保存结果尚未确认' : '需要核对当前状态'}</strong><p>${escapeText(state.error)}</p><div class="section-actions actions">${state.unresolved ? button('retry-save', '核对并重试同一次保存', `${state.busy ? 'disabled' : ''}`) : button('refresh', '重新读取当前状态', `${state.busy ? 'disabled' : ''}`)}</div>${state.unresolved ? '<p class="meta">保留原请求身份，不新增第二次操作；未确认前暂停其他写入。</p>' : ''}</div>`;
 }
 
+function loginView() {
+  return `<div class="page-heading"><div><div class="heading-label">本机访问</div><h1>登录本机工作台</h1><p>使用管理员交付的本机令牌。企业、经营者和角色由 Host 绑定，页面不能选择或替换。</p></div></div><div class="panel" style="max-width:520px"><div class="notice">登录后浏览器只使用 HttpOnly 会话 cookie；令牌不会保存在页面脚本或本地存储。</div>${state.error ? `<div class="notice danger" role="alert">${escapeText(state.error)}</div>` : ''}<form id="login-form"><div class="field"><label for="login-token">本机令牌</label><input id="login-token" name="token" type="password" autocomplete="current-password" required autofocus><span class="helper">不需要填写企业 ID、机器身份或角色。</span></div><div class="actions"><button class="primary" type="submit">登录</button></div></form></div>`;
+}
+function maintenanceView() {
+  const value = state.maintenance;
+  return `<div class="page-heading"><div><div class="heading-label">本机维护 / 只读</div><h1>本机维护状态</h1><p>维护者只能查看运行与组件事实，不能读取或修改经营委托。</p></div></div><div class="panel">${value ? `<dl class="definition-list"><div><dt>运行环境</dt><dd>${escapeText(value.runtime?.status || 'unknown')} · ${escapeText(value.runtime?.message || '')}</dd></div><div><dt>计算</dt><dd>${escapeText(value.compute)}</dd></div><div><dt>Call</dt><dd>${escapeText(value.call)}</dd></div><div><dt>外部出口</dt><dd>${escapeText(Object.entries(value.egress || {}).map(([key, status]) => `${key}: ${status}`).join(' · '))}</dd></div></dl>` : '<p class="secondary">正在读取本机维护状态。</p>'}</div>`;
+}
+
 function overview() {
   const pending = pendingDecisions();
   const shown = state.delegations.filter((item) => state.reminders ? pending.some((entry) => entry.delegationId === item.id) || notificationMatters(item.notificationFeed).length > 0 : state.filter === 'all' || (state.filter === 'ended' ? item.lifecycle === 'ended' : item.lifecycle !== 'ended'));
@@ -249,7 +263,7 @@ function detail(item) {
 function progress(item) {
   const tickets = records('research');
   const following = ['following', 'running', 'researching', 'waiting', 'idle', 'ready'].includes(item.research?.status);
-  return `<div class="detail-grid"><div class="main-column">${currentJudgment()}${intakeSummaryPanel()}${lifecycleControlsPanel()}${notificationPanel(item)}<section><div class="section-heading"><h2>当前研究重点</h2><span class="meta">方法与优先级由 Agent 自主决定</span></div>${tickets.length ? `<ol class="research-records">${tickets.map(ticket=>ticketCard(ticket,item)).join('')}</ol>` : `<div class="subtle-panel"><h3>${escapeText(researchLabel(item))}</h3><p>当前尚无可核实的研究工单；运行限制与业务资料缺口分别记录。</p></div>`}</section><section class="subtle-panel"><div class="section-heading"><h2>下一步</h2></div><p>${item.lifecycle === 'ended' ? '本委托已结束。继续工作时可新建关联委托，重新核对资料与授权。' : item.lifecycle === 'paused' ? '已有目标和记录保持可见。收到恢复意图后，Host 会先核对当前资格。' : item.lifecycle === 'resuming' ? '等待当前运行资格核对；尚未续作，不重放未知操作。' : ['pausing', 'ending'].includes(item.lifecycle) ? '等待 Host 核对停止事实，期间不派发新研究。' : following ? 'Host 已启用持续跟进；研究执行和判断以工单、报告记录为准。无需保持此页面打开，新进展会随保存的记录更新。' : '等待当前运行限制处理。已有目标和补充资料会保留，无需重复录入。'}</p>${followupList(item)}<p class="scope-line">委托边界：${escapeText(item.boundary || '未补充额外偏好；当前仅研究与建议，经营动作由负责人决定。')}</p></section>${versionHistory(item)}${technicalDetails()}</div><aside class="side-column"><section class="panel"><h2>资料覆盖</h2>${coverageMini()}<div class="source-mini"><div class="source-heading"><span>Call</span>${badge('待接入')}</div><p>只读接缝开发后排，当前未读取 Call 资产。</p></div></section><section class="panel"><h2>最近记录</h2>${activity(item)}</section></aside></div>`;
+  return `<div class="detail-grid"><div class="main-column">${currentJudgment()}${intakeSummaryPanel()}${lifecycleControlsPanel()}${lifecycleSummariesPanel()}${notificationPanel(item)}<section><div class="section-heading"><h2>当前研究重点</h2><span class="meta">方法与优先级由 Agent 自主决定</span></div>${tickets.length ? `<ol class="research-records">${tickets.map(ticket=>ticketCard(ticket,item)).join('')}</ol>` : `<div class="subtle-panel"><h3>${escapeText(researchLabel(item))}</h3><p>当前尚无可核实的研究工单；运行限制与业务资料缺口分别记录。</p></div>`}</section><section class="subtle-panel"><div class="section-heading"><h2>下一步</h2></div><p>${item.lifecycle === 'ended' ? '本委托已结束。继续工作时可新建关联委托，重新核对资料与授权。' : item.lifecycle === 'paused' ? '已有目标和记录保持可见。收到恢复意图后，Host 会先核对当前资格。' : item.lifecycle === 'resuming' ? '等待当前运行资格核对；尚未续作，不重放未知操作。' : ['pausing', 'ending'].includes(item.lifecycle) ? '等待 Host 核对停止事实，期间不派发新研究。' : following ? 'Host 已启用持续跟进；研究执行和判断以工单、报告记录为准。无需保持此页面打开，新进展会随保存的记录更新。' : '等待当前运行限制处理。已有目标和补充资料会保留，无需重复录入。'}</p>${followupList(item)}<p class="scope-line">委托边界：${escapeText(item.boundary || '未补充额外偏好；当前仅研究与建议，经营动作由负责人决定。')}</p></section>${versionHistory(item)}${technicalDetails()}</div><aside class="side-column"><section class="panel"><h2>资料覆盖</h2>${coverageMini()}<div class="source-mini"><div class="source-heading"><span>Call</span>${badge('待接入')}</div><p>只读接缝开发后排，当前未读取 Call 资产。</p></div></section><section class="panel"><h2>最近记录</h2>${activity(item)}</section></aside></div>`;
 }
 
 function intakeSummaryPanel() {
@@ -266,10 +280,23 @@ function lifecycleControlsPanel() {
   return `<section class="subtle-panel"><div class="section-heading"><h2>研究控制</h2><span class="meta">采集与研究分开</span></div><p class="secondary">${status.researchPaused ? `研究暂停中；获准采集继续。${status.pausedScopes.length ? `暂停方向：${escapeText(status.pausedScopes.join('、'))}。` : '全部研究方向等待恢复。'}` : '研究按授权继续；未暂停方向不受其他局部等待影响。'}</p>${plans.length ? `<details class="history-disclosure"><summary>约定恢复／结束（${plans.length}）</summary><ul class="plain-list">${plans.map(plan => `<li class="meta">${plan.kind === 'resume' ? '恢复' : '结束'} · ${time(plan.at)}<br>${escapeText(plan.reason)} · ${escapeText(plan.status)}</li>`).join('')}</ul></details>` : ''}</section>`;
 }
 
+function lifecycleSummariesPanel() {
+  const summaries = records('lifecycleSummaries');
+  if (!summaries.length) return '';
+  const latest = summaries.at(-1);
+  const previous = summaries.slice(0, -1);
+  return `<section class="subtle-panel"><div class="section-heading"><h2>恢复与结束核对</h2><span class="meta">仅汇总已保存事实</span></div>${lifecycleSummaryCard(latest)}${previous.length ? `<details class="history-disclosure" data-disclosure="lifecycle-summary-history"><summary>历史核对摘要（${previous.length}）</summary>${previous.map(lifecycleSummaryCard).join('')}</details>` : ''}</section>`;
+}
+function lifecycleSummaryCard(summary) {
+  const labels = { changes: '期间变化', gaps: '资料空白与待重核', eligible: '仍有效资格', continuations: '可继续项', waiting: '等待项与未决原因', plans: '方案版本', choices: '负责人选择', executions: '实际执行', observations: '经营观察', failures: '失败记录', unknowns: 'UNKNOWN', pending: '未决事项与收束原因' };
+  const facts = (items) => Array.isArray(items) && items.length ? `<ul class="plain-list">${items.map((fact) => `<li><strong>${escapeText(fact.kind)}</strong><p class="record-body">${escapeText(fact.detail || '事实已保存')}</p><p class="meta">${escapeText(fact.id)}${fact.at ? ` · ${time(fact.at)}` : ''}</p></li>`).join('')}</ul>` : '<p class="secondary">无已保存记录。</p>';
+  return `<article data-lifecycle-summary="${escapeText(summary.kind)}" data-summary-id="${escapeText(summary.id)}"><div class="section-heading"><h3>${summary.kind === 'resume' ? '恢复核对摘要' : '结束收束摘要'}</h3><span class="meta">${time(summary.createdAt)}</span></div><p class="meta">汇总起点 ${time(summary.since)} · 一次性保存，迟到结果不改写</p>${Object.entries(summary.sections || {}).map(([key, items]) => `<details class="history-disclosure" data-disclosure="${disclosureKey('lifecycle-summary', summary.kind, summary.id, key)}"${summary.kind === 'resume' && ['changes', 'gaps', 'continuations', 'waiting'].includes(key) ? ' open' : ''}><summary>${escapeText(labels[key] || key)}（${Array.isArray(items) ? items.length : 0}）</summary>${facts(items)}</details>`).join('')}</article>`;
+}
+
 function ticketCard(ticket, item) {
   const assignment = Array.isArray(ticket.assignments) ? ticket.assignments.at(-1) : null;
   const report = assignment?.report;
-  return `<li class="research-record"><div class="record-heading"><h3>${escapeText(ticket.title || '研究工单')}</h3>${badge(ticket.qualification === 'historical' ? '历史工单 · 当前目标未派发' : item.lifecycle === 'ended' ? '已停止 · 历史工单' : item.lifecycle === 'paused' ? '暂停 · 工单保留' : ['pausing','ending'].includes(item.lifecycle) ? '停止结果待核对' : item.lifecycle === 'resuming' ? '恢复资格待核对' : recordState(ticket.ended?.outcome || assignment?.state || 'pending'), ticket.qualification === 'historical' ? 'warning' : assignment?.state === 'running' && item.lifecycle === 'active' ? 'accent' : '')}</div><p class="meta">建立 ${time(ticket.createdAt)} · 最近变化 ${time(ticket.updatedAt)}</p>${report ? `<p class="record-body">${escapeText(report.summary)}</p><p class="meta">${ticket.reportQualification === 'historical' ? '历史工单报告 · 需重新核对依据' : '工单报告'} · ${escapeText(recordState(report.state))} · ${time(report.at)}</p>` : '<p class="secondary">尚无已保存的工单报告。</p>'}${ticket.attention?.question ? `<p class="notice warning record-body">待关注：${escapeText(ticket.attention.question)}</p>` : ''}${ticket.ended?.reason ? `<p class="meta">收束原因：${escapeText(ticket.ended.reason)}</p>` : ''}</li>`;
+  return `<li class="research-record"><div class="record-heading"><h3>${escapeText(ticket.title || '研究工单')}</h3>${badge(ticket.qualification === 'historical' ? '历史工单 · 当前目标未派发' : item.lifecycle === 'ended' ? '已停止 · 历史工单' : item.lifecycle === 'paused' ? '暂停 · 工单保留' : ['pausing','ending'].includes(item.lifecycle) ? '停止结果待核对' : item.lifecycle === 'resuming' ? '恢复资格待核对' : recordState(ticket.ended?.outcome || assignment?.state || 'pending'), ticket.qualification === 'historical' ? 'warning' : assignment?.state === 'running' && item.lifecycle === 'active' ? 'accent' : '')}</div><p class="meta">建立 ${time(ticket.createdAt)} · 最近变化 ${time(ticket.updatedAt)}</p>${report ? `<p class="record-body">${escapeText(report.summary || '历史工单正文待当前资格重核，暂不回放。')}</p><p class="meta">${ticket.reportQualification === 'historical' ? '历史工单报告 · 需重新核对依据' : '工单报告'} · ${escapeText(recordState(report.state))} · ${time(report.at)}</p>` : '<p class="secondary">尚无已保存的工单报告。</p>'}${ticket.attention?.question ? `<p class="notice warning record-body">待关注：${escapeText(ticket.attention.question)}</p>` : ''}${ticket.ended?.reason ? `<p class="meta">收束原因：${escapeText(ticket.ended.reason)}</p>` : ''}</li>`;
 }
 function coverageMini() {
   const coverage = records('sources');
@@ -314,7 +341,7 @@ function plan() {
   const revisions = records('artifactRevisions').slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || Number(b.version) - Number(a.version));
   if (!reports.length && !revisions.length) return '<div class="empty-state compact"><h2>尚未交付方案</h2><p>方案会保留建议、备选代价、依据、假设、未知及观察安排。当前没有可核实的研究交付。</p></div>';
   const currentVersions = revisions.filter((entry) => entry.qualification === 'current' && isLatestRevision(entry)); const history = revisions.filter((entry) => !currentVersions.includes(entry));
-  const basicReports = reports.length ? `<section class="section-actions"><h2>基础研究报告</h2><p class="secondary">保留原报告；基础报告不等于完整方案。</p><ol class="research-records section-actions">${reports.map((entry) => `<li class="research-record"><div class="record-heading"><h3>研究报告</h3><div class="actions">${badge(recordState(entry.state))}${badge(entry.qualification === 'current' ? '当前资格' : '历史成果', entry.qualification === 'current' ? 'accent' : 'warning')}</div></div><p class="meta">${time(entry.createdAt)} · 委托 v${escapeText(entry.goalRevision)}</p><p class="record-body">${escapeText(entry.summary)}</p><div class="report-evidence"><h3>依据版本</h3>${evidenceList(entry.evidence)}</div></li>`).join('')}</ol></section>` : '';
+  const basicReports = reports.length ? `<section class="section-actions"><h2>基础研究报告</h2><p class="secondary">保留原报告；基础报告不等于完整方案。</p><ol class="research-records section-actions">${reports.map((entry) => `<li class="research-record"><div class="record-heading"><h3>研究报告</h3><div class="actions">${badge(recordState(entry.state))}${badge(entry.qualification === 'current' ? '当前资格' : '历史成果', entry.qualification === 'current' ? 'accent' : 'warning')}</div></div><p class="meta">${time(entry.createdAt)} · 委托 v${escapeText(entry.goalRevision)}</p><p class="record-body">${escapeText(entry.summary || '历史报告正文待当前资格重核，暂不回放。')}</p><div class="report-evidence"><h3>依据版本</h3>${evidenceList(entry.evidence)}</div></li>`).join('')}</ol></section>` : '';
   return `<div class="notice"><strong>判断、方案与准确依据</strong><p>每版保留当时建议与修订原因。交付不表示负责人采纳、实际执行或经营效果已发生。</p></div>${currentVersions.length ? `<ol class="research-records section-actions">${currentVersions.map(artifactCard).join('')}</ol>` : revisions.length ? '<p class="secondary section-actions">尚无当前可用的最新版本，已有成果在历史中保留。</p>' : ''}${history.length ? `<details class="history-disclosure" data-disclosure="artifact-history"><summary>历史判断与方案（${history.length}）</summary><ol class="research-records section-actions">${history.map(artifactCard).join('')}</ol></details>` : ''}${basicReports}`;
 }
 function decisionElementId(entry) { return `decision-${encodeURIComponent(entry.id)}-${Number(entry.revision)}`; }
@@ -322,6 +349,7 @@ function decisionAttributes(entry) { return `data-id="${escapeText(entry.id)}" d
 function decisionDraftKey(entry) { return JSON.stringify([entry.id, entry.revision, entry.artifact?.artifactId, entry.artifact?.version]); }
 function decisionResponses(entry) { return Array.isArray(entry.responses) ? entry.responses : records('decisionResponses').filter((response) => (response.decisionId || response.id) === entry.id && response.revision === entry.revision); }
 function decisionCard(entry, item) {
+  if (!entry.title && !entry.question) return `<article class="decision-card" id="${escapeText(decisionElementId(entry))}" tabindex="-1" data-decision-id="${escapeText(entry.id)}" data-decision-revision="${escapeText(entry.revision)}"><div class="record-heading">${badge('历史待决 · 正文待重核', 'warning')}<span class="meta">事项 r${escapeText(entry.revision)} · 方案 v${escapeText(entry.artifact?.version)}</span></div><p class="secondary">来源、方案或目标资格已变化，待决正文、选项及回应暂不回放；真实窗口和准确引用保留。</p><p class="meta">${escapeText(entry.closureReason || '需按当前资格重新建立')} · 最迟有效决定时间：${entry.window?.decideBy ? time(entry.window.decideBy) : '暂无硬性截止'}</p>${button('artifact-open', `查看方案 v${escapeText(entry.artifact?.version)} 的当前资格`, `class="text-button" data-artifact="${escapeText(entry.artifact?.artifactId)}" data-plan-version="${escapeText(entry.artifact?.version)}"`)}</article>`;
   const responses = decisionResponses(entry); const seen = entry.seenAt || responses.some((response) => response.action === 'acknowledge');
   const latest = !records('decisions').some((other) => other.id === entry.id && Number(other.revision) > Number(entry.revision));
   const eligible = latest && entry.qualification === 'current' && ['pending', 'deferred'].includes(entry.status) && item.lifecycle === 'active';
@@ -335,7 +363,7 @@ function decisions(item) {
   const entries = records('decisions'); const choices = records('operatorChoices');
   if (!entries.length && !choices.length) return '<div class="empty-state compact"><h2>当前没有待决事项</h2><p>研究判断与负责人选择分别保存。沉默、已读或暂停均不记作采纳。</p></div>';
   const currentEntries = entries.filter((entry) => entry.qualification === 'current' && !entries.some((other) => other.id === entry.id && Number(other.revision) > Number(entry.revision))); const historical = entries.filter((entry) => !currentEntries.includes(entry));
-  return `${currentEntries.map((entry) => decisionCard(entry, item)).join('')}${historical.length ? `<details class="history-disclosure" data-disclosure="decision-history"><summary>历史待决事项（${historical.length}）</summary>${historical.map((entry) => decisionCard(entry, item)).join('')}</details>` : ''}<section class="decision-history"><div class="section-heading"><h2>选择记录</h2>${button('tab', '查看结果四项 →', 'class="text-button" data-tab="results"')}</div>${choices.length ? choices.map((choice) => `<div class="history-row"><div><strong>${escapeText(choiceLabel(choice.action))}</strong><p class="record-body">${escapeText(choice.text)}</p><p class="record-body">范围：${escapeText(choice.scope || '以明确回应记录为准')}</p><span class="meta">方案 v${escapeText(choice.artifact?.version)} · 事项 r${escapeText(choice.revision)} · 不等于实际执行或新增授权</span></div><span class="meta">${time(choice.createdAt)}</span></div>`).join('') : '<p class="alert-empty">尚无明确经营选择。已读、沉默、暂停均不记作采纳。</p>'}</section>`;
+  return `${currentEntries.map((entry) => decisionCard(entry, item)).join('')}${historical.length ? `<details class="history-disclosure" data-disclosure="decision-history"><summary>历史待决事项（${historical.length}）</summary>${historical.map((entry) => decisionCard(entry, item)).join('')}</details>` : ''}<section class="decision-history"><div class="section-heading"><h2>选择记录</h2>${button('tab', '查看结果四项 →', 'class="text-button" data-tab="results"')}</div>${choices.length ? choices.map((choice) => `<div class="history-row"><div><strong>${choice.qualification === 'unavailable' ? '历史选择 · 正文待重核' : escapeText(choiceLabel(choice.action))}</strong><p class="record-body">${choice.qualification === 'unavailable' ? '资格已变化，选择与回应正文暂不回放。' : escapeText(choice.text)}</p><p class="record-body">${choice.qualification === 'unavailable' ? '准确版本引用保留。' : `范围：${escapeText(choice.scope || '以明确回应记录为准')}`}</p><span class="meta">方案 v${escapeText(choice.artifact?.version)} · 事项 r${escapeText(choice.revision)} · 不等于实际执行或新增授权</span></div><span class="meta">${time(choice.createdAt)}</span></div>`).join('') : '<p class="alert-empty">尚无明确经营选择。已读、沉默、暂停均不记作采纳。</p>'}</section>`;
 }
 function outcomeSources(entry) {
   const evidence = Array.isArray(entry.evidence) ? entry.evidence : []; const statements = Array.isArray(entry.statementIds) ? entry.statementIds : [];
@@ -437,8 +465,22 @@ function navigate(id = null, tab = 'progress', reminders = false, decisionRef = 
   window.scrollTo({ top: 0 });
 }
 
+async function loadSession() {
+  try { state.session = await request('/api/session'); state.error = ''; }
+  catch (error) { state.session = null; if (error.status !== 401) state.error = error.message; }
+  finally { state.loaded = true; render(); }
+}
+
 async function refresh() {
   if (refreshing) return;
+  if (!state.session) { state.loaded = true; render(); return; }
+  if (state.session.role === 'maintainer') {
+    refreshing = true;
+    try { state.maintenance = await request('/api/maintenance'); state.connected = true; state.updatedAt = new Date().toISOString(); }
+    catch (error) { state.connected = false; if (error.status === 401) { state.session = null; state.error = ''; } else state.error = error.message; }
+    finally { refreshing = false; state.loaded = true; render(); }
+    return;
+  }
   refreshing = true;
   let refreshedId = null;
   const requestedTarget = decisionNavigation;
@@ -454,7 +496,8 @@ async function refresh() {
     state.connected = true; state.updatedAt = new Date().toISOString();
   } catch (error) {
     state.connected = false;
-    if (!state.loaded || !['CONNECTION_UNCONFIRMED', 'RESPONSE_UNCONFIRMED', 'REQUEST_UNCONFIRMED'].includes(error.code)) state.error = error.message;
+    if (error.status === 401) { state.session = null; state.error = ''; }
+    else if (!state.loaded || !['CONNECTION_UNCONFIRMED', 'RESPONSE_UNCONFIRMED', 'REQUEST_UNCONFIRMED'].includes(error.code)) state.error = error.message;
   } finally {
     refreshing = false; state.loaded = true; render();
     const target = decisionNavigation;
@@ -541,6 +584,13 @@ function respondToDecision(entry, action, additions = {}) {
   void mutate(`/api/delegations/${encodeURIComponent(item.id)}/commands`, payload, action === 'reply' ? 'decision-reply' : action === 'acknowledge' ? 'decision-acknowledge' : 'decision');
 }
 
+$('#logout').addEventListener('click', async () => {
+  try { await request('/api/logout', { method: 'POST' }); }
+  catch (error) { state.error = error.message; }
+  state.session = null; state.delegations = []; state.detail = null; state.maintenance = null; state.selectedId = null; state.reminders = false; state.connected = false; state.error = '';
+  history.replaceState(null, '', '#overview'); render(); $('#login-token')?.focus();
+});
+
 $('#modal').addEventListener('close', () => {
   if (opener?.isConnected) opener.focus({ preventScroll: true });
   else { const action = opener?.dataset.action; const equivalent = action ? Array.from(document.querySelectorAll('[data-action]')).find((element) => !element.disabled && Object.entries(opener.dataset).every(([key, value]) => element.dataset[key] === value)) : null; (equivalent || $('#main')).focus({ preventScroll: true }); }
@@ -555,6 +605,7 @@ document.addEventListener('click', (event) => {
   if (action === 'theme') { applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); return; }
   if (action === 'close-dialog') { closeDialog(); return; }
   if (action === 'refresh') { state.error = ''; void refresh(); return; }
+  if (action === 'maintenance') { state.selectedId = null; state.reminders = false; history.replaceState(null, '', '#maintenance'); render(); void refresh(); return; }
   if (action === 'retry-save' && state.unresolved) { const pending = state.unresolved; void mutate(pending.path, pending.payload, pending.purpose, true); return; }
   if (action === 'overview' || action === 'reminders') { navigate(null, 'progress', action === 'reminders'); return; }
   if (action === 'open' || action === 'reminder-open') { navigate(control.dataset.id, action === 'reminder-open' ? 'decisions' : 'progress', false, action === 'reminder-open' ? { id: control.dataset.decision, revision: Number(control.dataset.decisionRevision) } : null); return; }
@@ -577,10 +628,17 @@ document.addEventListener('click', (event) => {
   }
   if (['pause', 'resume', 'end'].includes(action)) command(action);
 });
-document.addEventListener('submit', (event) => {
-  if (!['create-form', 'edit-form', 'conversation-form', 'decision-reply-form', 'lifecycle-form', 'preferences-form'].includes(event.target.id)) return;
-  event.preventDefault(); if (!canWrite()) return;
+document.addEventListener('submit', async (event) => {
+  if (!['login-form', 'create-form', 'edit-form', 'conversation-form', 'decision-reply-form', 'lifecycle-form', 'preferences-form'].includes(event.target.id)) return;
+  event.preventDefault();
   const form = event.target; const data = new FormData(form);
+  if (form.id === 'login-form') {
+    const token = String(data.get('token') || '');
+    try { state.session = await request('/api/login', { method: 'POST', body: JSON.stringify({ token }) }); state.error = ''; form.reset(); await refresh(); }
+    catch (error) { state.error = error.message; render(); $('#login-token')?.focus(); }
+    return;
+  }
+  if (!canWrite()) return;
   if (form.id === 'decision-reply-form') {
     const text = String(data.get('text') || '').trim();
     if (!text) { $('#decision-error').textContent = '请说明你的选择或希望调整的条件。'; $('#decision-note').setAttribute('aria-invalid', 'true'); $('#decision-note').focus(); return; }
@@ -650,4 +708,4 @@ async function pollProjection() {
 }
 window.addEventListener('pagehide', () => clearTimeout(refreshTimer));
 window.addEventListener('pageshow', () => { clearTimeout(refreshTimer); void pollProjection(); });
-readLocation(); void refresh();
+readLocation(); void loadSession().then(() => refresh());

@@ -13,7 +13,7 @@ const root = resolve('.local/ui-checks'); mkdirSync(root, { recursive: true });
 const output = mkdtempSync(join(root, 'run-'));
 const session = `sentiscope-ui-${randomUUID()}`;
 const store = new SentiStore({ filename: join(output, 'business.sqlite') });
-const host = await startLocalHost({ store, owner: { enterpriseId: 'ui-fixture', principalId: 'ui-fixture' } });
+const host = await startLocalHost({ allowUnauthenticated: true,  store, owner: { enterpriseId: 'ui-fixture', principalId: 'ui-fixture' } });
 const commands = [];
 let error;
 async function browser(...args) {

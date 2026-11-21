@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readdir, realpath, stat, open } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { resolve, relative, isAbsolute, extname, sep } from 'node:path';
@@ -17,10 +17,15 @@ export interface SourceRecord {
 export interface SourceEvent {
   eventId: string; kind: 'created' | 'updated' | 'deleted' | 'grant_changed' | 'unavailable' | 'restored';
   sourceId: string; ref: string | null; record: SourceRecord | null; grantRevision: number;
-  observedAt: string; reason?: string;
+  observedAt: string; reason?: string; collectionId?: string;
 }
 export interface SourceQualification { available: boolean; reason?: string; grantRevision: number; epoch: number }
 export interface SourceScanContext { readonly qualificationEpoch: number }
+export interface SourceCollectionCycle {
+  readonly id: string;
+  readonly acquisitions: number;
+  snapshot(source: SourceStore, grant: SourceGrant): Promise<unknown>;
+}
 export interface SourceCoverage {
   sourceId: string; status: 'pending' | 'ready' | 'unavailable' | 'revoked'; grantRevision: number;
   lastCheckedAt: string | null; reason: string | null;
@@ -30,6 +35,7 @@ interface GrantRow { source_id: string; config: string; status: SourceCoverage['
 interface Cursor { path: string; ref: string; hash: string; state: 'present' | 'deleted'; revision: number }
 interface FileFact { path: string; hash: string; bytes: number; modifiedAt: string; text: string }
 interface Snapshot { grant: NormalGrant; files: FileFact[]; root?: string; reason?: string }
+type AcquiredSnapshot = Snapshot & { collectionId?: string };
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 const allowed = new Set(['.txt', '.md', '.json', '.csv']);
 const isInside = (root: string, target: string) => { const part = relative(root, target); return part !== '..' && !part.startsWith(`..${sep}`) && !isAbsolute(part); };
@@ -58,8 +64,26 @@ export class SourceStore {
       CREATE TABLE IF NOT EXISTS source_events (namespace TEXT NOT NULL,event_id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(namespace,event_id));
       CREATE TABLE IF NOT EXISTS source_qualification_observations (namespace TEXT NOT NULL,ref TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(namespace,ref));
       CREATE TABLE IF NOT EXISTS source_roots (namespace TEXT NOT NULL,source_id TEXT NOT NULL,grant_revision INTEGER NOT NULL,root TEXT NOT NULL,PRIMARY KEY(namespace,source_id));
+      CREATE TABLE IF NOT EXISTS source_scan_sequences (namespace TEXT NOT NULL,source_id TEXT NOT NULL,next_claim INTEGER NOT NULL,committed_claim INTEGER NOT NULL,PRIMARY KEY(namespace,source_id));
     `);
     store.connection.prepare('INSERT OR IGNORE INTO source_scopes VALUES (?,0,0)').run(this.#ns);
+  }
+  static createCollectionCycle(): SourceCollectionCycle {
+    const snapshots = new Map<string, { id: string; pending: Promise<Snapshot> }>();
+    return {
+      id: randomUUID(),
+      get acquisitions() { return snapshots.size; },
+      async snapshot(source, input) {
+        const grant = source.#normal(input);
+        let canonical = grant.directory;
+        if (grant.enabled) try { canonical = await source.#root(grant); } catch { canonical = grant.directory; }
+        const key = JSON.stringify([canonical, grant.enabled, grant.maxFiles, grant.maxBytes, source.#protected]);
+        let entry = snapshots.get(key);
+        if (!entry) { entry = { id: randomUUID(), pending: source.#snapshot(grant) }; snapshots.set(key, entry); }
+        const snapshot = await entry.pending;
+        return { ...snapshot, grant, collectionId: entry.id };
+      },
+    };
   }
   #scope() { return this.#store.scope(this.#binding.owner, this.#binding.delegationId); }
   #rows(): GrantRow[] { return this.#store.connection.prepare('SELECT * FROM source_grants WHERE namespace=? ORDER BY source_id').all(this.#ns) as unknown as GrantRow[]; }
@@ -98,8 +122,21 @@ export class SourceStore {
     });
   }
   grantsRevision(): number { this.#scope(); return (this.#store.connection.prepare('SELECT grants_epoch AS n FROM source_scopes WHERE namespace=?').get(this.#ns) as { n: number }).n; }
+  sourceIds(): string[] { this.#scope(); return this.#rows().map(row => row.source_id); }
   qualificationEpoch(): number { this.#scope(); return (this.#store.connection.prepare('SELECT qualification_epoch AS n FROM source_scopes WHERE namespace=?').get(this.#ns) as { n: number }).n; }
   events(limit = 100): SourceEvent[] { this.#scope(); return this.#store.connection.prepare('SELECT payload FROM source_events WHERE namespace=? ORDER BY rowid DESC LIMIT ?').all(this.#ns, Math.max(1, Math.min(limit, 100))).map(row => JSON.parse(row.payload as string)).reverse(); }
+  changesSince(since: string): { sourceId: string; kind: SourceEvent['kind']; count: number; latestEventId: string; latestObservedAt: string; collectionId?: string }[] {
+    this.#scope();
+    const rows = this.#store.connection.prepare(`SELECT json_extract(payload,'$.sourceId') AS source_id,json_extract(payload,'$.kind') AS kind,
+      count(*) AS count,max(json_extract(payload,'$.observedAt')) AS latest_at FROM source_events
+      WHERE namespace=? AND json_extract(payload,'$.observedAt')>=? GROUP BY source_id,kind ORDER BY source_id,kind`).all(this.#ns, since) as unknown as { source_id: string; kind: SourceEvent['kind']; count: number; latest_at: string }[];
+    return rows.map(row => {
+      const latest = this.#store.connection.prepare(`SELECT payload FROM source_events WHERE namespace=? AND json_extract(payload,'$.sourceId')=?
+        AND json_extract(payload,'$.kind')=? AND json_extract(payload,'$.observedAt')=? ORDER BY rowid DESC LIMIT 1`).get(this.#ns, row.source_id, row.kind, row.latest_at) as { payload: string };
+      const event = JSON.parse(latest.payload) as SourceEvent;
+      return { sourceId: row.source_id, kind: row.kind, count: row.count, latestEventId: event.eventId, latestObservedAt: row.latest_at, ...(event.collectionId ? { collectionId: event.collectionId } : {}) };
+    });
+  }
   #bump() { this.#store.connection.prepare('UPDATE source_scopes SET qualification_epoch=qualification_epoch+1 WHERE namespace=?').run(this.#ns); }
   coverage(): SourceCoverage[] {
     this.#scope(); return this.#rows().map((row) => ({ sourceId: row.source_id, status: row.status, grantRevision: (JSON.parse(row.config) as NormalGrant).grantRevision, lastCheckedAt: row.checked_at, reason: row.reason }));
@@ -172,30 +209,61 @@ export class SourceStore {
       await walk(root); return { grant, files, root };
     } catch (error) { return { grant, files: [], reason: error instanceof StoreError ? error.code : 'source_unavailable' }; }
   }
-  async scan(onRecord: (event: SourceEvent, context: SourceScanContext) => void): Promise<SourceEvent[]> {
+  #beginScan(): { epoch: number; rows: GrantRow[]; claims: { sourceId: string; claim: number }[] } {
+    return this.#store.withTransaction(() => {
+      const epoch = this.grantsRevision(), rows = this.#rows();
+      const claims = rows.map(row => {
+        this.#store.connection.prepare('INSERT OR IGNORE INTO source_scan_sequences VALUES (?,?,1,0)').run(this.#ns, row.source_id);
+        const state = this.#store.connection.prepare('SELECT next_claim AS next FROM source_scan_sequences WHERE namespace=? AND source_id=?').get(this.#ns, row.source_id) as { next: number };
+        this.#store.connection.prepare('UPDATE source_scan_sequences SET next_claim=next_claim+1 WHERE namespace=? AND source_id=?').run(this.#ns, row.source_id);
+        return { sourceId: row.source_id, claim: state.next };
+      });
+      return { epoch, rows, claims };
+    });
+  }
+  async scan(onRecord: (event: SourceEvent, context: SourceScanContext) => void, cycle?: SourceCollectionCycle): Promise<SourceEvent[]> {
     if (onRecord.constructor.name === 'AsyncFunction') throw new StoreError('async_source_callback', '来源接收回调必须同步提交。');
     if (this.#scope().lifecycle !== 'active') return [];
-    const epoch = this.grantsRevision(); const snapshots = await Promise.all(this.#rows().map((row) => this.#snapshot(JSON.parse(row.config) as NormalGrant)));
+    const { epoch, rows, claims } = this.#beginScan();
+    const snapshots = await Promise.all(rows.map(async row => {
+      const grant = JSON.parse(row.config) as NormalGrant;
+      const snapshot = (cycle ? await cycle.snapshot(this, grant) : await this.#snapshot(grant)) as AcquiredSnapshot;
+      if (cycle && grant.enabled && !snapshot.reason) {
+        try {
+          const root = await this.#root(grant);
+          if (root !== snapshot.root) throw new StoreError('source_root_changed', '来源根已改变，需新的Host授权修订。', 403);
+        } catch (error) {
+          return { grant, files: [], reason: error instanceof StoreError ? error.code : 'source_unavailable' };
+        }
+      }
+      return { ...snapshot, grant };
+    }));
     return this.#store.withTransaction(() => {
       if (this.#scope().lifecycle !== 'active' || this.grantsRevision() !== epoch) throw new StoreError('source_grant_changed', '扫描期间委托或来源授权已变化。', 409);
+      for (const { sourceId, claim } of claims) {
+        const state = this.#store.connection.prepare('SELECT committed_claim AS committed FROM source_scan_sequences WHERE namespace=? AND source_id=?').get(this.#ns, sourceId) as { committed: number };
+        if (state.committed > claim) return [];
+      }
+      for (const { sourceId, claim } of claims) this.#store.connection.prepare('UPDATE source_scan_sequences SET committed_claim=? WHERE namespace=? AND source_id=?').run(claim, this.#ns, sourceId);
       const events: SourceEvent[] = []; const at = new Date().toISOString();
       const context:SourceScanContext=Object.freeze({qualificationEpoch:this.qualificationEpoch()});
-      const emit = (event: SourceEvent) => {
-        this.#store.connection.prepare('INSERT INTO source_events VALUES (?,?,?)').run(this.#ns, event.eventId, JSON.stringify(event));
-        const result = onRecord(structuredClone(event),context) as unknown;
+      const emit = (event: SourceEvent, collectionId?: string) => {
+        const received: SourceEvent = collectionId ? { ...event, collectionId } : event;
+        this.#store.connection.prepare('INSERT INTO source_events VALUES (?,?,?)').run(this.#ns, received.eventId, JSON.stringify(received));
+        const result = onRecord(structuredClone(received),context) as unknown;
         if (result && typeof (result as { then?: unknown }).then === 'function') {
           void Promise.resolve(result).catch(() => {}); throw new StoreError('async_source_callback', '来源接收回调必须同步提交。');
         }
-        events.push(event); this.#bump();
+        events.push(received); this.#bump();
       };
       for (const snapshot of snapshots) {
-        const { grant, files, reason } = snapshot; const current = this.#grant(grant.sourceId)!; const row = current.row;
+        const { grant, files, reason, collectionId } = snapshot; const current = this.#grant(grant.sourceId)!; const row = current.row;
         const status: SourceCoverage['status'] = !grant.enabled ? 'revoked' : reason ? 'unavailable' : 'ready';
         const revision = row.revision + 1;
         const stateEvent = (kind: SourceEvent['kind'], why?: string): SourceEvent => ({ eventId: hash(JSON.stringify([this.#ns, grant.sourceId, 'state', revision, kind])), kind, sourceId: grant.sourceId, ref: null, record: null, grantRevision: grant.grantRevision, observedAt: at, ...(why ? { reason: why } : {}) });
-        if (row.config_pending) emit(stateEvent('grant_changed', grant.enabled ? 'grant_configured' : 'source_revoked'));
-        if (status === 'unavailable' && (row.status !== status || row.reason !== reason)) emit(stateEvent('unavailable', reason));
-        if (status === 'ready' && row.status === 'unavailable') emit(stateEvent('restored'));
+        if (row.config_pending) emit(stateEvent('grant_changed', grant.enabled ? 'grant_configured' : 'source_revoked'), collectionId);
+        if (status === 'unavailable' && (row.status !== status || row.reason !== reason)) emit(stateEvent('unavailable', reason), collectionId);
+        if (status === 'ready' && row.status === 'unavailable') emit(stateEvent('restored'), collectionId);
         this.#store.connection.prepare('UPDATE source_grants SET status=?,checked_at=?,reason=?,revision=?,config_pending=0 WHERE namespace=? AND source_id=?').run(status, at, reason ?? null, revision, this.#ns, grant.sourceId);
         if (status !== 'ready') continue;
         this.#store.connection.prepare('INSERT INTO source_roots VALUES (?,?,?,?) ON CONFLICT(namespace,source_id) DO UPDATE SET grant_revision=excluded.grant_revision,root=excluded.root').run(this.#ns, grant.sourceId, grant.grantRevision, snapshot.root!);
@@ -208,11 +276,11 @@ export class SourceStore {
           this.#store.connection.prepare('INSERT INTO source_documents VALUES (?,?,?,?) ON CONFLICT(namespace,ref) DO NOTHING').run(this.#ns, ref, JSON.stringify(record), grant.cacheBody ? file.text : null);
           const next = (prior?.revision ?? 0) + 1;
           this.#store.connection.prepare(`INSERT INTO source_cursors VALUES (?,?,?,?,?,'present',?) ON CONFLICT(namespace,source_id,path) DO UPDATE SET ref=excluded.ref,hash=excluded.hash,state='present',revision=excluded.revision`).run(this.#ns, grant.sourceId, file.path, ref, file.hash, next);
-          emit({ eventId: hash(JSON.stringify([this.#ns, grant.sourceId, file.path, next, 'present', file.hash])), kind: prior ? 'updated' : 'created', sourceId: grant.sourceId, ref, record, grantRevision: grant.grantRevision, observedAt: at });
+          emit({ eventId: hash(JSON.stringify([this.#ns, grant.sourceId, file.path, next, 'present', file.hash])), kind: prior ? 'updated' : 'created', sourceId: grant.sourceId, ref, record, grantRevision: grant.grantRevision, observedAt: at }, collectionId);
         }
         for (const prior of cursors) if (prior.state === 'present' && !files.some((file) => file.path === prior.path)) {
           this.#store.connection.prepare("UPDATE source_cursors SET state='deleted',revision=revision+1 WHERE namespace=? AND source_id=? AND path=?").run(this.#ns, grant.sourceId, prior.path);
-          emit({ eventId: hash(JSON.stringify([this.#ns, grant.sourceId, prior.path, prior.revision + 1, 'deleted'])), kind: 'deleted', sourceId: grant.sourceId, ref: prior.ref, record: this.#record(prior.ref), grantRevision: grant.grantRevision, observedAt: at });
+          emit({ eventId: hash(JSON.stringify([this.#ns, grant.sourceId, prior.path, prior.revision + 1, 'deleted'])), kind: 'deleted', sourceId: grant.sourceId, ref: prior.ref, record: this.#record(prior.ref), grantRevision: grant.grantRevision, observedAt: at }, collectionId);
         }
       }
       return structuredClone(events);
@@ -257,6 +325,17 @@ export class SourceStore {
       if (!(error instanceof StoreError) || error.code === 'source_not_found') throw error;
       const record = this.#record(ref); return { available: false, reason: error.code, grantRevision: this.#grant(record.sourceId)!.grant.grantRevision, epoch: this.qualificationEpoch() };
     }
+  }
+  canReplay(ref: string, expectedHash: string): boolean {
+    try {
+      const record = this.#record(ref); if (record.hash !== expectedHash) return false;
+      const current = this.#grant(record.sourceId); if (!current?.grant.enabled || current.row.status !== 'ready' || !['active', 'paused', 'ended'].includes(this.#scope().lifecycle)) return false;
+      const cursor = this.#store.connection.prepare('SELECT ref,state FROM source_cursors WHERE namespace=? AND source_id=? AND path=?').get(this.#ns, record.sourceId, record.relativePath) as { ref: string; state: string } | undefined;
+      if (cursor?.state === 'present' && cursor.ref === ref) return true;
+      if (!current.grant.cacheBody || !current.grant.allowHistorical) return false;
+      const cached = this.#store.connection.prepare('SELECT body FROM source_documents WHERE namespace=? AND ref=?').get(this.#ns, ref) as { body: string | null };
+      return cached.body !== null;
+    } catch { return false; }
   }
   async readExact(ref: string, expectedHash: string): Promise<{ record: SourceRecord; text: string }> { return this.#access(ref, expectedHash); }
 }

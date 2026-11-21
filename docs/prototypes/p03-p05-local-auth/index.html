@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light">
+<title>OptraSentiScope · 本机登录差异 Demo</title>
+<link rel="icon" type="image/svg+xml" href="../../../src/web/favicon.svg">
+<link rel="stylesheet" href="../../../src/web/styles.css">
+<style>.auth-panel{max-width:520px}.demo-identities{margin-top:20px}.demo-identities .actions{margin-top:10px}</style>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+<div class="demo-banner">交互演示 · 虚构资料 · 仅内存状态 · 本机登录差异候选 <span>未调用模型、来源或真实令牌</span></div>
+<div class="shell">
+<aside class="sidebar" aria-label="工作台导航">
+<a class="brand" href="#overview" aria-label="OptraSentiScope 经营者工作台"><span class="brand-mark small" aria-hidden="true"><span></span><i></i></span><div><strong>OptraSentiScope</strong><span>持续做出更好的决策</span></div></a>
+<nav class="primary-nav" aria-label="主要导航"><button class="nav-button" id="overview-nav" disabled><span aria-hidden="true">▦</span> 委托总览</button><button class="nav-button" id="reminders-nav" disabled><span aria-hidden="true">◇</span> 待决提醒 <span class="nav-count">0</span></button><button class="nav-button" id="maintenance-nav" hidden><span aria-hidden="true">▤</span> 本机维护</button></nav>
+<div class="side-section" id="mandate-section" hidden><p class="eyebrow">当前委托</p><div id="mandate-nav"><button class="mandate-nav active">共享合成来源委托</button></div></div>
+<div class="side-footer"><span class="status-dot muted-dot"></span><strong>Call 待接入</strong><p>本演示没有读取 Call，也未连接任何实际来源。</p></div>
+</aside>
+<div class="workspace">
+<header class="topbar"><span class="workspace-name" id="workspace-name">经营者工作台 <span class="muted">/ 登录差异候选</span></span><div class="inline-actions"><span id="connection-status" class="meta">未登录</span><button id="logout" class="ghost" hidden>退出登录</button><button id="theme-toggle" class="icon-button" aria-label="切换为亮色主题" title="切换主题">☀</button></div></header>
+<main id="main" tabindex="-1"><div id="screen">
+<section id="login-view"><div class="page-heading"><div><div class="heading-label">本机访问</div><h1>登录本机工作台</h1><p>使用管理员交付的本机令牌。企业、经营者和角色由 Host 绑定，页面不能选择或替换。</p></div></div><div class="panel auth-panel"><div class="notice">正式实现只保存 token／session 的 SHA256；浏览器使用 HttpOnly 会话 cookie。此 Demo 不检查真实令牌。</div><form id="login-form"><div class="field"><label for="token">本机令牌</label><input id="token" type="password" autocomplete="current-password" required placeholder="选择下方虚构身份以填入"><span class="helper">不需要填写企业 ID、机器身份或角色。</span></div><div id="login-error" class="notice danger" role="alert" hidden></div><div class="actions"><button class="primary" type="submit">登录</button></div></form><div class="subtle-panel demo-identities"><h3>可点击演示身份（虚构 token）</h3><div class="actions"><button data-demo="operator">经营者 operator-demo</button><button data-demo="maintainer">维护者 maintainer-demo</button><button data-demo="wrong">无效令牌 → 401</button></div></div></div></section>
+<section id="operator-view" hidden><div class="page-heading"><div><div class="heading-label">持续委托 / 工作空间</div><h1>委托总览</h1><p>查看重要变化、当前判断，以及需要你作出的取舍。</p></div><div class="actions"><button class="primary">＋ 新建委托</button></div></div><div class="attention"><section class="panel"><div class="panel-title"><h2>需要你的取舍</h2><span class="badge">0 项待决</span></div><p class="alert-empty">当前没有可核实的待决事项。研究判断与经营选择分别记录。</p></section><section class="panel"><div class="panel-title"><h2>重要变化</h2><span class="badge">站内记录</span></div><div class="change-row"><div><h3>共享合成来源已更新</h3><p>已有研究得到补充，另一个独立问题成立。</p><p class="meta">同一采集 ID · 两个独立授权委托</p></div></div></section></div><section><div class="list-toolbar"><div class="section-heading"><h2>我的委托</h2><span class="meta">1 个</span></div></div><div class="mandate-list"><div class="list-header"><span>委托与目标</span><span>生命周期</span><span>研究状态</span><span>最近变化</span></div><div class="mandate-row"><div><button class="mandate-title">共享合成来源委托</button><p>用一句话建立目标，持续查看来源变化与恢复摘要。</p></div><div><span class="badge accent">进行中</span></div><div class="research-label">持续跟进已启用</div><div class="last-update meta">刚刚</div></div></div></section><div class="section-actions"><button id="operator-maintenance" class="ghost">尝试打开维护者只读入口</button></div><div id="operator-denied" class="notice danger" role="alert" hidden></div></section>
+<section id="maintainer-view" hidden><div class="page-heading"><div><div class="heading-label">本机维护 / 只读</div><h1>本机维护状态</h1><p>维护者只能查看运行与组件事实，不能读取或修改经营委托。</p></div></div><div class="panel"><dl class="definition-list"><div><dt>运行环境</dt><dd>runtime configured · 本机回环入口</dd></div><div><dt>计算</dt><dd>OFF · 无 Host 执行回退</dd></div><div><dt>Call</dt><dd>待接入</dd></div><div><dt>外部出口</dt><dd>外部研究、外发提醒、导出、遥测和外部备份未启用</dd></div><div><dt>官方组件</dt><dd>Harness 0.2.2-rc.3 · superagent 固定提交</dd></div></dl></div><div class="section-actions"><button id="maintainer-business" class="ghost">尝试读取经营委托</button></div><div id="maintainer-denied" class="notice danger" role="alert" hidden></div></section>
+</div></main>
+<footer class="page-footer"><p>此页面只演示本机登录差异。刷新即重置；真实持续研究、安全控制与生产身份尚未在此验证。</p><details class="boundary-note"><summary>运行与资料边界（设计说明）</summary><div class="boundary-content"><p>Host 管理运行环境、权限、凭据和资源；Agent 在获准范围内自主选择研究方法。登录只增加必要身份确认，不增加普通读取或研究审批。</p><dl class="definition-list"><div><dt>模型输入</dt><dd>仅向获准模型提供获准内容，历史、摘要、工具结果和附件同样受当前资格约束。</dd></div><div><dt>外部研究与连接器</dt><dd>限获准来源和网络范围。</dd></div><div><dt>提醒与导出</dt><dd>限接收人、渠道和内容范围。</dd></div><div><dt>日志、监控与备份</dt><dd>留在企业控制范围，避免凭据和不必要正文进入日志。</dd></div></dl></div></details></footer>
+</div></div>
+<div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+<script>
+const $=s=>document.querySelector(s),views={login:$('#login-view'),operator:$('#operator-view'),maintainer:$('#maintainer-view')},token=$('#token');
+function show(role){for(const [name,view] of Object.entries(views))view.hidden=name!==role;const signedIn=role!=='login';$('#logout').hidden=!signedIn;$('#overview-nav').disabled=role!=='operator';$('#reminders-nav').disabled=role!=='operator';$('#overview-nav').classList.toggle('active',role==='operator');$('#maintenance-nav').hidden=role!=='maintainer';$('#maintenance-nav').classList.toggle('active',role==='maintainer');$('#mandate-section').hidden=role!=='operator';$('#connection-status').textContent=role==='login'?'未登录':role==='operator'?'已连接 · 经营者':'已连接 · 维护者';$('#workspace-name').innerHTML=role==='maintainer'?'本机维护状态 <span class="muted">/ 登录差异候选</span>':'经营者工作台 <span class="muted">/ 登录差异候选</span>';$('#announcement').textContent=role==='login'?'已退出登录':role==='operator'?'经营者已登录':'维护者已登录';}
+for(const button of document.querySelectorAll('[data-demo]'))button.addEventListener('click',()=>{const kind=button.dataset.demo;token.value=kind==='wrong'?'wrong-token':kind+'-demo';token.focus();});
+$('#login-form').addEventListener('submit',event=>{event.preventDefault();if(token.value==='operator-demo'||token.value==='maintainer-demo'){show(token.value==='operator-demo'?'operator':'maintainer');token.value='';$('#login-error').hidden=true;}else{$('#login-error').hidden=false;$('#login-error').textContent='401 · 令牌无效或会话已失效，请核对管理员交付的本机令牌。';token.select();}});
+$('#logout').addEventListener('click',()=>{show('login');token.value='';$('#operator-denied').hidden=true;$('#maintainer-denied').hidden=true;token.focus();});
+$('#operator-maintenance').addEventListener('click',()=>{const notice=$('#operator-denied');notice.hidden=false;notice.textContent='403 · operator 不能读取维护者入口；角色权限由 Host 强制。';});
+$('#maintainer-business').addEventListener('click',()=>{const notice=$('#maintainer-denied');notice.hidden=false;notice.textContent='403 · maintainer 不能读取或修改经营委托；不能通过请求体替换 owner。';});
+$('#theme-toggle').addEventListener('click',()=>{const dark=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=dark?'light':'dark';$('#theme-toggle').textContent=dark?'☾':'☀';$('#theme-toggle').setAttribute('aria-label',dark?'切换为暗色主题':'切换为亮色主题');});
+</script>
+</body></html>

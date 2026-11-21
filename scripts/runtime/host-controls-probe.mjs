@@ -29,6 +29,14 @@ class LocalSynthetic extends LlmAdapter {
   if(options.model==='retry'){
    yield {type:'finish',reason:{kind:'error',failure:this.makeFailure()}};return;
   }
+  if(options.model==='worker-compute'){
+   const users=options.messages.filter(message=>message.role==='user'),latest=renderText(users.at(-1)),worker=users.some(message=>renderText(message).includes('SENTISCOPE_WORKER'));
+   if(options.messages.at(-1)?.role!=='tool'&&(worker||latest.includes('SENTISCOPE_ASSESS'))){
+    let block;if(worker)block={type:'tool-call',id:ToolCallId(randomUUID()),name:'run_compute',arguments:JSON.stringify({command:[process.execPath,'-e',`require('node:fs').writeFileSync(${JSON.stringify(this.marker)},'UNEXPECTED_HOST_EXECUTION')`],timeoutMs:100,inputRefs:[]})};
+    else{const candidate=JSON.parse(latest.split('\n')[1]);block={type:'tool-call',id:ToolCallId(randomUUID()),name:'decide_event',arguments:JSON.stringify({triggerId:candidate.triggers[0].id,evalId:candidate.evalId,kind:'accept',title:'Worker compute rejection',scope:'worker-compute',reason:'Synthetic worker compute check'})};}
+    yield{type:'block-start',index:0,blockType:'tool-call'};yield{type:'block-end',index:0,block};yield{type:'usage',usage:{inputTokens:3,outputTokens:2,totalTokens:5,reasoningTokens:1}};yield{type:'finish',reason:{kind:'tool-calls'}};return;
+   }
+  }
   if(options.model==='tool'){
    const block={type:'tool-call',id:ToolCallId(randomUUID()),name:'run_compute',arguments:JSON.stringify({command:[process.execPath,'-e',`require('node:fs').writeFileSync(${JSON.stringify(this.marker)},'UNEXPECTED_HOST_EXECUTION')`],timeoutMs:100,inputRefs:[]})};
    yield {type:'block-start',index:0,blockType:'tool-call'};yield {type:'block-end',index:0,block};yield {type:'usage',usage:{inputTokens:3,outputTokens:2,totalTokens:5,reasoningTokens:1}};yield {type:'finish',reason:{kind:'tool-calls'}};return;
@@ -124,6 +132,12 @@ export async function apply(ctx,config){
   await wait(()=>retryDecisions===1,'official same-step retry hook');await wait(()=>r.host.controls.snapshot(r.id).block==='budget_exhausted','retry counted at actual stream boundary');await wait(()=>ctx.agents.get(retryId)===undefined,'native retry denied quiescence');
   assert.equal(adapter.calls.slice(r.start).filter(call=>call.model==='retry').length,1,'Retry must not bypass the consumed/held request grant');const retryEvents=await history(ctx,retryId);assert.ok(retryEvents.some(e=>e.type==='assistant/attempt'));assertSecretFree(retryEvents,'native failure stream/attempt/turn facts');assert.equal(r.host.controls.budget(r.id).snapshot().held.modelRequests,1);
   result.checks.push('A real native same-step retry decision still passes through HostControls at llm/stream; the second attempt is denied before adapter dispatch and raw provider failure text is excluded from native history');result.cases.push({name:'native-retry-reservation',retryDecisions,adapterRequests:1});await finishHost(r);retryDisposer();retryDisposer=undefined;
+
+  const w=await makeHost('worker-compute',{requests:8});let workerSession;
+  await wait(()=>{const row=w.host.store.connection.prepare("SELECT value FROM research_runs WHERE delegation_id=? AND json_extract(value,'$.binding.role')='worker' ORDER BY generation DESC LIMIT 1").get(w.id);if(!row)return false;workerSession=JSON.parse(row.value).sessionId;return adapter.calls.slice(w.start).some(call=>call.sessionId===workerSession);},'official Engine worker compute request');
+  await wait(()=>ctx.agents.get(workerSession)?.status==='idle','worker compute tool result quiescence');const workerEvents=await history(ctx,workerSession);
+  assert.ok(workerEvents.some(event=>event.type==='tool/result'&&renderText(event.data.message).includes('compute_unavailable')));assert.ok(!existsSync(marker),'Worker compute refusal must not execute on Host');assertSecretFree(workerEvents,'worker compute native facts');
+  result.checks.push('An actual official Engine worker calls run_compute through the native tool executor and receives compute_unavailable; no Host process or marker is created');result.cases.push({name:'official-worker-compute-closed',sessionId:workerSession,role:'worker',dispatched:false});await finishHost(w);
 
   for(const call of adapter.calls)assertSecretFree(call.request,'model request');for(const directory of dataDirectories)for(const suffix of ['business.sqlite','business.sqlite-wal','business.sqlite-shm']){const file=resolve(directory,suffix);if(existsSync(file))for(const secret of secrets)assert.ok(!readFileSync(file).includes(Buffer.from(secret)),'Synthetic credential leaked into business SQLite');}
   assertSecretFree(result,'probe response/result');assert.ok(!existsSync(marker));result.redaction={syntheticValues:2,scanned:['actual model requests','native/tool facts','business SQLite including sidecars','HTTP/Host capability receipts','callback errors'],excluded:'Only explicitly configured fresh private CredentialLocal vault may contain synthetic values'};result.requestCount=adapter.calls.length;result.status='PASS';

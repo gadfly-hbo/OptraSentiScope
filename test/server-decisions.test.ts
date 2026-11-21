@@ -10,7 +10,7 @@ test('an exact operator response reaches the Host-owned decision seam after auth
  const responses:unknown[]=[],changed:string[]=[];
  const port={status:{status:'synthetic',message:'No real model'},detail:()=>({decisions:[],decisionResponses:responses,operatorChoices:[]}),changed:(id:string)=>{changed.push(id);},
   async respondDecision(id:string,input:unknown){assert.equal(id,d.id);responses.push(input);return {id:'saved-human-response'};}};
- const host=await startLocalHost({store,owner,researchPort:port} as LocalHostOptions);
+ const host=await startLocalHost({ allowUnauthenticated: true, store,owner,researchPort:port} as LocalHostOptions);
  const body={kind:'decision_response',id:'decision-exact',revision:1,artifact:{artifactId:'plan-exact',version:2},requestId:'reply-once',action:'acknowledge',text:'已知悉'};
  const post=(id:string,value:unknown)=>fetch(`${host.url}/api/delegations/${id}/commands`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
  try{

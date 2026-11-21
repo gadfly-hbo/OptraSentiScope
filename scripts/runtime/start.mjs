@@ -112,7 +112,7 @@ function hostConfig(path, runtimeRoot) {
     try { input = JSON.parse(readFileSync(file, 'utf8')); }
     catch { throw new Error('INVALID_HOST_CONFIG_DOCUMENT'); }
   }
-  object(input, ['dataDirectory', 'owner', 'port', 'model', 'intervalSeconds', 'grants', 'budgets', 'modelEgress', 'credentialGrants', 'resourceDefaults'], 'HOST_CONFIG');
+  object(input, ['dataDirectory', 'owner', 'port', 'model', 'intervalSeconds', 'grants', 'budgets', 'modelEgress', 'credentialGrants', 'resourceDefaults', 'auth'], 'HOST_CONFIG');
   const owner = input.owner ?? { enterpriseId: 'local-enterprise', principalId: 'local-operator' };
   object(owner, ['enterpriseId', 'principalId'], 'OWNER');
   const config = {
@@ -130,6 +130,12 @@ function hostConfig(path, runtimeRoot) {
   if (input.modelEgress !== undefined) config.modelEgress = dictionary(input.modelEgress, 'EGRESS_DELEGATION_ID', grant => modelEgress(grant, true));
   if (input.credentialGrants !== undefined) config.credentialGrants = credentialGrants(input.credentialGrants, true);
   if (input.resourceDefaults !== undefined) config.resourceDefaults = resourceDefaults(input.resourceDefaults);
+  if (input.auth !== undefined) {
+    object(input.auth, ['operatorTokenHash', 'maintainerTokenHash', 'sessionTtlSeconds'], 'AUTH');
+    const tokenHash = value => { if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) throw new Error('INVALID_AUTH_TOKEN_HASH'); return value; };
+    config.auth = { operatorTokenHash: tokenHash(input.auth.operatorTokenHash), maintainerTokenHash: tokenHash(input.auth.maintainerTokenHash) };
+    if (input.auth.sessionTtlSeconds !== undefined) config.auth.sessionTtlSeconds = integer(input.auth.sessionTtlSeconds, 60, 86400, 'SESSION_TTL_SECONDS');
+  }
   if (input.grants !== undefined) {
     object(input.grants, Object.keys(input.grants), 'GRANTS');
     for (const [delegationId, grants] of Object.entries(input.grants)) {
@@ -203,7 +209,7 @@ function profile(runtimeRoot, sdkRoot, config) {
 async function main() {
   const options = parse(process.argv.slice(2));
   if (options.help) {
-    console.log('node scripts/runtime/start.mjs [--config .local/host.json] [--runtime-root .local/product-runtime] [--sdk-root .local/official-sdk]\nPrivate Host JSON: dataDirectory, owner {enterpriseId,principalId}, port, optional model {provider,model,maxTokens}, intervalSeconds, grants {delegationId: SourceGrant[]}, budgets, modelEgress, credentialGrants, resourceDefaults.\nResource configuration holds limits and non-secret references only. Credentials stay in data/private/credentials.yaml; no Provider, network or compute enable flag is supported.\nAll relative paths resolve from the project. Defaults: port 8766, no model, no sources, no enabled model transport. No installation or inherited DSH configuration.');
+    console.log('node scripts/runtime/start.mjs [--config .local/host.json] [--runtime-root .local/product-runtime] [--sdk-root .local/official-sdk]\nPrivate Host JSON: dataDirectory, owner {enterpriseId,principalId}, port, optional model {provider,model,maxTokens}, intervalSeconds, grants {delegationId: SourceGrant[]}, budgets, modelEgress, credentialGrants, resourceDefaults, auth {operatorTokenHash,maintainerTokenHash,sessionTtlSeconds}.\nResource configuration holds limits and non-secret references only. Credentials stay in data/private/credentials.yaml; no Provider, network or compute enable flag is supported.\nAll relative paths resolve from the project. Defaults: port 8766, no model, no sources, no enabled model transport. No installation or inherited DSH configuration.');
     return;
   }
   process.umask(0o077);

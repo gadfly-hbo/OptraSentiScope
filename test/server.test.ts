@@ -29,7 +29,7 @@ test('a goal created through the workbench API survives a complete host restart 
   const directory = mkdtempSync(join(testRoot, 'http-reopen-'));
   const filename = join(directory, 'business.sqlite');
   let store = new SentiStore({ filename });
-  let host = await startLocalHost({ store, owner });
+  let host = await startLocalHost({ allowUnauthenticated: true,  store, owner });
   try {
     const response = await fetch(`${host.url}/api/delegations`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -43,7 +43,7 @@ test('a goal created through the workbench API survives a complete host restart 
     assert.deepEqual(created.artifacts, []);
     await host.close(); store.close();
     store = new SentiStore({ filename });
-    host = await startLocalHost({ store, owner });
+    host = await startLocalHost({ allowUnauthenticated: true,  store, owner });
     const reopened = await detailJson(await fetch(`${host.url}/api/delegations/${created.delegation.id}`));
     assert.equal(reopened.delegation.goal, '持续关注协作中的变化');
     assert.equal(reopened.delegation.id, created.delegation.id);
@@ -55,7 +55,7 @@ test('a goal created through the workbench API survives a complete host restart 
 
 test('cross-site requests and browser-supplied identity cannot read or create enterprise records', async () => {
   const store = new SentiStore({ filename: ':memory:' });
-  const host = await startLocalHost({ store, owner });
+  const host = await startLocalHost({ allowUnauthenticated: true,  store, owner });
   try {
     const foreign = await fetch(`${host.url}/api/delegations`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://untrusted.example' },
@@ -94,7 +94,7 @@ test('pause stays in flight until a Host receipt, and duplicate HTTP intent does
     status: { status: 'test_boundary', message: '合成外部资源回执边界，不是SDK验证' },
     async settle() { calls += 1; return new Promise((resolve) => { settle = resolve; }); },
   };
-  const host = await startLocalHost({ store, owner, controlPort: port });
+  const host = await startLocalHost({ allowUnauthenticated: true,  store, owner, controlPort: port });
   try {
     const created = await detailJson(await fetch(`${host.url}/api/delegations`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -122,7 +122,7 @@ test('pause stays in flight until a Host receipt, and duplicate HTTP intent does
 
 test('the real workbench is served with a restrictive CSP and private source files are not exposed', async () => {
   const store = new SentiStore({ filename: ':memory:' });
-  const host = await startLocalHost({ store, owner });
+  const host = await startLocalHost({ allowUnauthenticated: true,  store, owner });
   try {
     const page = await fetch(host.url);
     assert.equal(page.status, 200);
@@ -144,10 +144,10 @@ test('a second Host cannot reconcile a database still owned by a live Host', asy
   const filename = join(directory, 'business.sqlite');
   const store = new SentiStore({ filename });
   const secondStore = new SentiStore({ filename });
-  const first = await startLocalHost({ store, owner });
+  const first = await startLocalHost({ allowUnauthenticated: true,  store, owner });
   let second: Awaited<ReturnType<typeof startLocalHost>> | undefined;
   try {
-    await assert.rejects(async () => { second = await startLocalHost({ store: secondStore, owner }); }, /Host|占用/);
+    await assert.rejects(async () => { second = await startLocalHost({ allowUnauthenticated: true,  store: secondStore, owner }); }, /Host|占用/);
     assert.equal((await fetch(`${first.url}/api/health`)).status, 200);
   } finally { if (second) await second.close(); await first.close(); secondStore.close(); store.close(); rmSync(directory, { recursive: true, force: true }); }
 });
@@ -158,7 +158,7 @@ test('a new process can take over a dead Host lease and read the committed goal'
   const program = `import {SentiStore} from ${JSON.stringify(pathToFileURL(resolve('src/store.ts')).href)};
     import {startLocalHost} from ${JSON.stringify(pathToFileURL(resolve('src/server.ts')).href)};
     const store=new SentiStore({filename:${JSON.stringify(filename)}});
-    const host=await startLocalHost({store,owner:${JSON.stringify(owner)}});
+    const host=await startLocalHost({ allowUnauthenticated: true, store,owner:${JSON.stringify(owner)}});
     process.stdout.write(host.url+'\\n');`;
   const child = spawn(process.execPath, ['--input-type=module', '--eval', program], { stdio: ['ignore', 'pipe', 'pipe'] });
   const exited = once(child, 'exit');
@@ -175,7 +175,7 @@ test('a new process can take over a dead Host lease and read the committed goal'
       body: JSON.stringify({ goal: '异常退出前已提交的持续目标', idempotencyKey: 'before-process-exit' }),
     }));
     child.kill('SIGKILL'); await exited;
-    store = new SentiStore({ filename }); next = await startLocalHost({ store, owner });
+    store = new SentiStore({ filename }); next = await startLocalHost({ allowUnauthenticated: true,  store, owner });
     const restored = await detailJson(await fetch(`${next.url}/api/delegations/${saved.delegation.id}`));
     assert.equal(restored.delegation.goal, '异常退出前已提交的持续目标');
     assert.equal(restored.runtime.status, 'unconfigured');

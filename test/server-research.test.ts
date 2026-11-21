@@ -21,7 +21,7 @@ test('HTTP projections show actual optional research data and GET never starts r
   };
   const researchPort = { status: { status: 'sdk_ready', message: '合成HTTP投影，不是模型验证' }, detail: () => projection, changed: () => { notifications += 1; } };
   // The cast keeps the pre-implementation seam callable; a missing option is a behavior failure, not a compile RED.
-  const options = { store, owner, researchPort } as LocalHostOptions;
+  const options = { store, owner, researchPort, allowUnauthenticated: true } as LocalHostOptions;
   const host = await startLocalHost(options);
   try {
     const health = await (await fetch(`${host.url}/api/health`)).json() as { runtime: unknown };
@@ -42,7 +42,7 @@ test('HTTP projections show actual optional research data and GET never starts r
 test('successful create, adjustment and background messages notify research after the records are saved', async () => {
   const store = new SentiStore({ filename: ':memory:' });
   const notifications: { id: string; goal: string; messages: number }[] = [];
-  const host = await startLocalHost({ store, owner, researchPort: {
+  const host = await startLocalHost({ allowUnauthenticated: true,  store, owner, researchPort: {
     status: { status: 'sdk_ready', message: '合成通知边界' }, detail: () => ({}),
     changed(id) { const item = store.get(owner, id); notifications.push({ id, goal: item.goal, messages: item.messages.length }); },
   } });
@@ -76,7 +76,7 @@ test('successful create, adjustment and background messages notify research afte
 test('follow-up notification failures or pending work do not turn a committed goal into an HTTP save failure', async () => {
   for (const mode of ['throws', 'rejects', 'pending']) {
     const store = new SentiStore({ filename: ':memory:' });
-    const host = await startLocalHost({ store, owner, researchPort: {
+    const host = await startLocalHost({ allowUnauthenticated: true,  store, owner, researchPort: {
       status: { status: 'sdk_ready', message: '合成异步通知边界' }, detail: () => ({}),
       changed() {
         if (mode === 'throws') throw new Error('synthetic follow-up failure');
