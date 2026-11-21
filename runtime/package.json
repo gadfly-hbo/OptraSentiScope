@@ -8,7 +8,8 @@
     ".": "./native.ts",
     "./contracts": "./index.ts",
     "./backup": "./backup.ts",
-    "./plugin": "./plugin.ts"
+    "./plugin": "./plugin.ts",
+    "./synthetic": "./synthetic.ts"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.1.0",

@@ -134,7 +134,7 @@ export class ResearchCoordinator {
       if(item.id!==id)void this.#queue(()=>this.#sync(item.id,false)).catch((error:unknown)=>{this.#fact(item.id,'reconcile_failed',{status:'unknown',type:error instanceof Error?error.name:'unknown',code:error instanceof StoreError?error.code:undefined,reason:'Host after-commit reconciliation failed; no blind replay.'});});
     }
   }
-  async start():Promise<void> {for(const d of this.#o.store.list(this.#o.owner))await this.sync(d.id);}
+  async start():Promise<void> {for(const d of this.#o.store.list(this.#o.owner)){try{await this.sync(d.id);}catch(error:unknown){this.#fact(d.id,'reconcile_failed',{status:'unknown',type:error instanceof Error?error.name:'unknown',code:error instanceof StoreError?error.code:undefined,reason:'Host startup reconciliation failed; isolated per delegation, no blind replay.'});}}}
   sync(id:string):Promise<void> {return this.#queue(()=>this.#sync(id));}
   async #sync(id:string,scanSources=true):Promise<void> {
     if(this.#closing||await this.#applyDueLifecyclePlans(id))return;
@@ -309,7 +309,14 @@ export class ResearchCoordinator {
         this.#fact(id,'native_read',{role,messageId:fact.messageId,generation:fact.binding.generation});});},
       onTurn:fact=>{this.#o.store.withTransaction(()=>{this.#fact(id,'native_turn',{role,generation:fact.binding.generation,reason:fact.end.data.reason.kind,seq:fact.end.seq});if(this.#admit(fact.binding)&&ticket&&assignmentId)u.engine.turnEnded(ticket.id,assignmentId);});this.changed(id);},
       onFailure:fact=>{this.#fact(id,'native_failure',{role,generation:fact.binding.generation,status:'failed',type:fact.error instanceof Error?fact.error.name:'unknown'});},
-    });}catch(error){run.state=error instanceof Error&&error.message==='NATIVE_ADMISSION_DENIED'?'retired':'unknown';this.#saveRun(run);throw error;}
+    });}catch(error){
+      if(resumable&&error instanceof Error&&error.name==='SessionPersistenceNotFoundError'&&run.schedules.length===0){
+        // The run row committed before the session JSONL first flush; no native resource exists to resume or stop.
+        this.#fact(id,'native_session_missing',{role,generation:run.binding.generation});run.state='retired';this.#saveRun(run);
+        return this.#openEnsure(id,role,assignmentId,ticket,purpose);
+      }
+      run.state=error instanceof Error&&error.message==='NATIVE_ADMISSION_DENIED'?'retired':'unknown';this.#saveRun(run);throw error;
+    }
     if(resumable){
       if(role==='main'&&run.heartbeat===undefined){const rows=await handle.listSchedules();run.heartbeat=rows.some(row=>'kind' in row&&row.kind==='every'&&'title' in row&&row.title==='持续委托跟进');}
       if(run.contextDelivered===undefined)run.contextDelivered=Boolean(this.#o.store.connection.prepare("SELECT 1 FROM research_messages WHERE session_id=? AND json_extract(detail,'$.context')=1 LIMIT 1").get(run.sessionId));
@@ -632,7 +639,14 @@ export class ResearchCoordinator {
   async #retireRecorded(run:Run):Promise<void> {
     if(run.scheduleState==='unknown')throw new StoreError('schedule_unknown','原生定时创建回执未确认，不能宣称已停止。',409);
     // Management-only restore. No model, tools, delivery, step or Schedule activation is admitted.
-    const handle=await this.#o.native.open(run.binding,{sessionId:run.sessionId,resume:true,scheduleIds:run.schedules,tools:[],admit:(_b,phase)=>phase==='open'});
+    let handle;
+    try{handle=await this.#o.native.open(run.binding,{sessionId:run.sessionId,resume:true,scheduleIds:run.schedules,tools:[],admit:(_b,phase)=>phase==='open'});}
+    catch(error){
+      if(error instanceof Error&&error.name==='SessionPersistenceNotFoundError'&&run.schedules.length===0){
+        this.#fact(run.binding.delegationId,'native_session_missing_retire',{generation:run.binding.generation});run.state='retired';this.#saveRun(run);return;
+      }
+      throw error;
+    }
     await this.#closeRun({run,handle});
   }
   async #retire(id:string):Promise<void> {

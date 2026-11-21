@@ -112,7 +112,7 @@ function hostConfig(path, runtimeRoot) {
     try { input = JSON.parse(readFileSync(file, 'utf8')); }
     catch { throw new Error('INVALID_HOST_CONFIG_DOCUMENT'); }
   }
-  object(input, ['dataDirectory', 'owner', 'port', 'model', 'intervalSeconds', 'grants', 'budgets', 'modelEgress', 'credentialGrants', 'resourceDefaults', 'auth'], 'HOST_CONFIG');
+  object(input, ['dataDirectory', 'owner', 'port', 'model', 'intervalSeconds', 'grants', 'budgets', 'modelEgress', 'credentialGrants', 'resourceDefaults', 'auth', 'syntheticTrial'], 'HOST_CONFIG');
   const owner = input.owner ?? { enterpriseId: 'local-enterprise', principalId: 'local-operator' };
   object(owner, ['enterpriseId', 'principalId'], 'OWNER');
   const config = {
@@ -126,6 +126,11 @@ function hostConfig(path, runtimeRoot) {
     if (input.model.maxTokens !== undefined) config.model.maxTokens = integer(input.model.maxTokens, 1, 1048576, 'MAX_TOKENS');
   }
   if (input.intervalSeconds !== undefined) config.intervalSeconds = integer(input.intervalSeconds, 60, 86400, 'INTERVAL_SECONDS');
+  if (input.syntheticTrial !== undefined) {
+    if (typeof input.syntheticTrial !== 'boolean') throw new Error('INVALID_SYNTHETIC_TRIAL');
+    config.syntheticTrial = input.syntheticTrial;
+    if (input.syntheticTrial && input.model === undefined) config.model = { provider: 'sentiscope-synthetic-trial', model: 'synthetic', maxTokens: 128 };
+  }
   if (input.budgets !== undefined) config.budgets = dictionary(input.budgets, 'BUDGET_DELEGATION_ID', budgetConfig);
   if (input.modelEgress !== undefined) config.modelEgress = dictionary(input.modelEgress, 'EGRESS_DELEGATION_ID', grant => modelEgress(grant, true));
   if (input.credentialGrants !== undefined) config.credentialGrants = credentialGrants(input.credentialGrants, true);
@@ -188,7 +193,8 @@ function profile(runtimeRoot, sdkRoot, config) {
     ['storage', 'dsh-storage'], ['storage-json', 'dsh-storage-json', { root: resolve(config.dataDirectory, 'storage') }],
     ['storage-domain', 'dsh-storage-domain', { backend: 'json' }], ['schedule', 'dsh-schedule'],
   ].map(([id, name, options]) => ({ id, name: `@deepseek-ai/${name}`, ...(options ? { config: options } : {}) }));
-  const patch = json([{ insert: [...services, { id: 'sentiscope', name: 'sentiscope-runtime/plugin', config }] }]);
+  const synthetic = config.syntheticTrial ? [{ id: 'synthetic-trial-provider', name: 'sentiscope-runtime/synthetic', config: { provider: 'sentiscope-synthetic-trial' } }] : [];
+  const patch = json([{ insert: [...services, ...synthetic, { id: 'sentiscope', name: 'sentiscope-runtime/plugin', config }] }]);
   // A changed explicit Host configuration creates a fresh profile; earlier profiles are retained.
   const name = `sentiscope-product-${digest(json({ patch, source, consumer })).slice(0, 16)}`;
   const path = privatePath(resolve(home, 'profiles', name));
@@ -209,7 +215,7 @@ function profile(runtimeRoot, sdkRoot, config) {
 async function main() {
   const options = parse(process.argv.slice(2));
   if (options.help) {
-    console.log('node scripts/runtime/start.mjs [--config .local/host.json] [--runtime-root .local/product-runtime] [--sdk-root .local/official-sdk]\nPrivate Host JSON: dataDirectory, owner {enterpriseId,principalId}, port, optional model {provider,model,maxTokens}, intervalSeconds, grants {delegationId: SourceGrant[]}, budgets, modelEgress, credentialGrants, resourceDefaults, auth {operatorTokenHash,maintainerTokenHash,sessionTtlSeconds}.\nResource configuration holds limits and non-secret references only. Credentials stay in data/private/credentials.yaml; no Provider, network or compute enable flag is supported.\nAll relative paths resolve from the project. Defaults: port 8766, no model, no sources, no enabled model transport. No installation or inherited DSH configuration.');
+    console.log('node scripts/runtime/start.mjs [--config .local/host.json] [--runtime-root .local/product-runtime] [--sdk-root .local/official-sdk]\nPrivate Host JSON: dataDirectory, owner {enterpriseId,principalId}, port, optional model {provider,model,maxTokens}, intervalSeconds, grants {delegationId: SourceGrant[]}, budgets, modelEgress, credentialGrants, resourceDefaults, auth {operatorTokenHash,maintainerTokenHash,sessionTtlSeconds}, syntheticTrial (boolean).\nResource configuration holds limits and non-secret references only. Credentials stay in data/private/credentials.yaml; no external Provider, network or compute enable flag is supported. syntheticTrial=true registers only the fixed in-process local synthetic adapter (sentiscope-synthetic-trial/synthetic) for loopback trial use and still requires auth; it never enables external model transport.\nAll relative paths resolve from the project. Defaults: port 8766, no model, no sources, no enabled model transport. No installation or inherited DSH configuration.');
     return;
   }
   process.umask(0o077);
@@ -222,7 +228,7 @@ async function main() {
   const data = canonical(config.dataDirectory); const home = canonical(resolve(runtimeRoot, 'home'));
   if (data === home || inside(data, home) || inside(home, data)) throw new Error('PRODUCT_DATA_OVERLAPS_PROFILE_HOME');
   const consumerManifest = JSON.parse(readFileSync(resolve(project, 'runtime/package.json'), 'utf8'));
-  if (consumerManifest.name !== 'sentiscope-runtime' || !consumerManifest.exports?.['./plugin']) throw new Error('PRODUCT_PLUGIN_EXPORT_MISSING');
+  if (consumerManifest.name !== 'sentiscope-runtime' || !consumerManifest.exports?.['./plugin'] || (config.syntheticTrial && !consumerManifest.exports?.['./synthetic'])) throw new Error('PRODUCT_PLUGIN_EXPORT_MISSING');
   const { prepare } = await import('./prepare.mjs');
   const prepared = await prepare({ project, sdkRoot, consumerRoot: 'runtime', installMissing: false });
   if (prepared.status !== 'PASS') throw new Error(`SDK_PREPARATION_FAILED: ${prepared.error ?? prepared.output}`);
