@@ -170,6 +170,7 @@ export function createNativeResearchPort(ctx: Context, portOptions: NativePortOp
           return { messageId: message.id, accepted: true };
         },
         cancel(reason) { if(!closed){cancelCause=reason?{kind:'hook',reason}:{kind:'user'};closed = true; native.agent.cancel(cancelCause, { keepInbox: true });} },
+        interrupt(reason) { if(!closed)native.agent.cancel(reason?{kind:'hook',reason}:{kind:'user'}, { keepInbox: true }); },
         async whenIdle() { await native.agent.whenIdle(); await pending; if (observerError) throw observerError; },
         dispose() {
           disposal ??= (async () => {

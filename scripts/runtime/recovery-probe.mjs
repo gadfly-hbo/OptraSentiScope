@@ -53,7 +53,7 @@ export async function apply(ctx, config) {
     const grant = prior?.grant ?? { sourceId: 'recovery-empty-fixture', directory: mkdtempSync(resolve(tmpdir(), 'sentiscope-recovery-')), grantRevision: 1, enabled: true };
     assert.ok(existsSync(grant.directory), 'Cold phase reuses the original independent source root; it never recreates a missing grant target');
     host = await startProductHost(ctx, {
-      dataDirectory: resolve(config.root, 'data'), owner, port: 0,
+      dataDirectory: resolve(config.root, config.phase === 'cold' ? 'restored' : 'data'), owner, port: 0,
       model: { provider: 'sentiscope-recovery-engineering-only', model: 'local-synthetic', maxTokens: 64 }, intervalSeconds:60,notificationDefaults:{timeZone:'UTC',time:'23:59:59',weekdays:[1,2,3,4,5]},
       resourceDefaults: { budget: { limits: { modelRequests: 1000, outputTokens: 1000000, computeMilliseconds: 0 }, durationMs: 3600000 }, modelEgress: { enabled: true, provider: 'sentiscope-recovery-engineering-only', model: 'local-synthetic', maxTokens: 64 } },
       ...(prior ? { grants: { [prior.delegationId]: [prior.grant] } } : {}),
@@ -112,7 +112,7 @@ export async function apply(ctx, config) {
       assert.equal(host.store.connection.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
       result.checks.push('HTTP create produced actual official Engine ticket/Assignment and saved synthetic waiting report; exact owned Sessions and recurring Schedule persisted');
       result.checks.push('Explicit technical assessor-port fault was claimed without native delivery; it is labeled uncertain and must never be blindly replayed');
-      Object.assign(result, { status: 'READY', delegationId: id, grant, resourceBudget, runs: snapshot, schedules, tickets: detail.research, artifacts: detail.artifacts, uncertainIntent: uncertain, requests: adapter.calls, url: host.url });
+      Object.assign(result, { status: 'READY', delegationId: id, grant, resourceBudget, runs: snapshot, schedules, tickets: detail.research, artifacts: detail.artifacts, sourceEventCount: detail.sourceEvents.length, uncertainIntent: uncertain, requests: adapter.calls, url: host.url });
       save(config.output, result);
       keepRunning = true;
       // Driver must SIGKILL this spawned Host. No graceful product cleanup precedes the crash.
@@ -139,6 +139,12 @@ export async function apply(ctx, config) {
       }
       let detail = await request(`/api/delegations/${id}`);
       assert.equal(detail.sources.find(source => source.sourceId === grant.sourceId)?.status, 'ready');
+      assert.equal(detail.sourceEvents.length, prior.sourceEventCount, 'Restored source cursor does not replay already received pages');
+      for (const original of prior.schedules) {
+        const schedule = await ctx.schedule.view({ id: original.id });
+        assert.equal(schedule.target.sessionId, original.target.sessionId);
+        assert.equal(schedule.status, 'active', 'Restored native Schedule resumes under its exact original identity');
+      }
       const resumedFacts = detail.technical.filter(fact => fact.kind === 'native_resumed');
       for (const original of prior.runs) assert.ok(resumedFacts.some(fact => fact.detail.role === original.binding.role && fact.detail.generation > original.binding.generation));
       for (const ticket of prior.tickets) assert.ok(detail.research.some(row => row.id === ticket.id));

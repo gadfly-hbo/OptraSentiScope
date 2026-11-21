@@ -220,6 +220,48 @@ test('protected product output roots cannot be used as an external source', asyn
   } finally { f.close(); }
 });
 
+test('a failed multi-record receive rolls back the whole batch and cold reopen replays it once', async () => {
+  const f = fixture(); let reopened: SentiStore | undefined;
+  try {
+    writeFileSync(join(f.source, 'page-1.md'), 'first page'); writeFileSync(join(f.source, 'page-2.md'), 'second page');
+    f.sources.configureGrants([grant(f.source)]);
+    const attempted: SourceEvent[] = [];
+    await assert.rejects(f.sources.scan(event => {
+      if (event.kind !== 'created') return;
+      attempted.push(event);
+      if (event.record?.relativePath === 'page-2.md') throw new Error('interrupted batch receive');
+    }), /interrupted batch receive/);
+    assert.equal(attempted.length, 2);
+    assert.equal((f.store.connection.prepare('SELECT count(*) AS n FROM source_events').get() as { n: number }).n, 0);
+    assert.equal((f.store.connection.prepare('SELECT count(*) AS n FROM source_cursors').get() as { n: number }).n, 0);
+    f.store.close(); reopened = new SentiStore({ filename: join(f.directory, 'business.sqlite') });
+    const sources = new SourceStore(reopened, { owner, delegationId: f.item.id });
+    const recovered = (await sources.scan(() => {})).filter(event => event.kind === 'created');
+    assert.deepEqual(recovered.map(event => event.eventId), attempted.map(event => event.eventId));
+    assert.deepEqual(await sources.scan(() => { throw new Error('duplicate page delivery'); }), []);
+  } finally { if (reopened) { reopened.close(); rmSync(f.directory, { recursive: true, force: true }); } else f.close(); }
+});
+
+test('shared acquisition still revalidates each delegation source root anchor', async () => {
+  const f = fixture();
+  try {
+    const other = f.store.create(owner, { goal: '独立授权核对', idempotencyKey: 'other' });
+    const otherSources = new SourceStore(f.store, { owner, delegationId: other.id });
+    const first = join(f.directory, 'first-root'), second = join(f.directory, 'second-root'), current = join(f.directory, 'current-root');
+    mkdirSync(first); mkdirSync(second); writeFileSync(join(first, 'memo.md'), 'first root'); writeFileSync(join(second, 'memo.md'), 'second root');
+    symlinkSync(first, current);
+    for (const sources of [f.sources, otherSources]) { sources.configureGrants([grant(current)]); await sources.scan(() => {}); }
+    rmSync(current); symlinkSync(second, current);
+    f.sources.configureGrants([grant(current, { grantRevision: 2 })]);
+    const cycle = SourceStore.createCollectionCycle();
+    await f.sources.scan(() => {}, cycle); await otherSources.scan(() => {}, cycle);
+    assert.equal(f.sources.coverage()[0].status, 'ready');
+    assert.equal(otherSources.coverage()[0].status, 'unavailable');
+    assert.equal(otherSources.coverage()[0].reason, 'source_root_changed');
+    assert.equal(otherSources.listReferences().some(record => record.hash === f.sources.listReferences()[0]?.hash), false);
+  } finally { f.close(); }
+});
+
 test('owner and delegation bindings survive reopening and inactive delegations do not scan or read', async () => {
   const f = fixture(); let reopened: SentiStore | undefined;
   try {

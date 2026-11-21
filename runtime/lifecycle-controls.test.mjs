@@ -49,6 +49,20 @@ test('lifecycle control request replay keeps its original receipt across later r
  }finally{store.close();rmSync(directory,{recursive:true,force:true});}
 });
 
+test('a later direction cannot narrow global pause, scoped resume is case-insensitive, and stale schedules are rejected',async()=>{
+ const f=await boot();try{
+  const all=f.coordinator.pauseResearch(f.delegation.id,{expectedRevision:0,mode:'all',reason:'Global hold',idempotencyKey:'global-hold'});
+  const narrowed=f.coordinator.pauseResearch(f.delegation.id,{expectedRevision:all.revision,mode:'direction',scope:'P1',reason:'Clarify P1 only',idempotencyKey:'global-plus-direction'});
+  assert.equal(narrowed.researchPaused,true);assert.deepEqual([...narrowed.pausedScopes],[],'a direction command must not silently resume every other direction');
+  const resumed=f.coordinator.resumeResearch(f.delegation.id,{expectedRevision:narrowed.revision,reason:'Global input arrived',idempotencyKey:'global-resume'});
+  assert.equal(resumed.researchPaused,false);
+  const scoped=f.coordinator.pauseResearch(f.delegation.id,{expectedRevision:resumed.revision,mode:'direction',scope:'P1',reason:'Scoped hold',idempotencyKey:'scoped-hold'});
+  const scopedResume=f.coordinator.resumeResearch(f.delegation.id,{expectedRevision:scoped.revision,scope:'p1',reason:'Matching direction input arrived',idempotencyKey:'scoped-resume'});
+  assert.equal(scopedResume.researchPaused,false);assert.deepEqual([...scopedResume.pausedScopes],[]);
+  await assert.rejects(f.coordinator.scheduleEnd(f.delegation.id,{expectedRevision:scopedResume.revision+10,at:new Date(Date.now()+60000).toISOString(),reason:'Stale schedule',idempotencyKey:'stale-schedule'}),{code:'lifecycle_control_conflict'});
+ }finally{await f.close();}
+});
+
 test('pausing one direction preserves native steps and permits resuming an independent worker',async()=>{
  const f=await boot();
  const id=f.delegation.id;
@@ -95,11 +109,11 @@ test('due lifecycle plans resume research and end the delegation with matching d
  const f=await boot();try{
   const paused=await f.coordinator.pauseResearch(f.delegation.id,{expectedRevision:0,mode:'all',reason:'Wait for promised input',idempotencyKey:'pause-all'});
   const resumeAt=new Date(Date.now()+1100).toISOString();
-  await f.coordinator.scheduleResume(f.delegation.id,{expectedRevision:0,at:resumeAt,reason:'Promised resume',idempotencyKey:'due-resume'});
+  await f.coordinator.scheduleResume(f.delegation.id,{expectedRevision:paused.revision,at:resumeAt,reason:'Promised resume',idempotencyKey:'due-resume'});
   await new Promise(resolve=>setTimeout(resolve,1200));await f.coordinator.sync(f.delegation.id);
   const resumed=f.store.get(f.owner,f.delegation.id);assert.equal(resumed.lifecycle,'active');assert.equal(JSON.stringify(f.coordinator.detail(f.delegation.id).technical.filter(item=>item.kind==='lifecycle_resume_due').length>0),String(true));
   const endAt=new Date(Date.now()+1100).toISOString();
-  await f.coordinator.scheduleEnd(f.delegation.id,{expectedRevision:0,at:endAt,reason:'Validity expires',idempotencyKey:'due-end'});
+  await f.coordinator.scheduleEnd(f.delegation.id,{expectedRevision:f.coordinator.detail(f.delegation.id).lifecycleControls.status.revision,at:endAt,reason:'Validity expires',idempotencyKey:'due-end'});
   await new Promise(resolve=>setTimeout(resolve,1200));await f.coordinator.sync(f.delegation.id);
   const ended=f.store.get(f.owner,f.delegation.id),endedDetail=f.coordinator.detail(f.delegation.id);assert.equal(ended.lifecycle,'ended');assert.ok(endedDetail.technical.some(item=>item.kind==='lifecycle_end_due'));
  }finally{await f.close();}

@@ -26,7 +26,8 @@ import {ExperienceStore} from './experiences.ts';
 import type {SaveExperience,SaveExperienceUse,ExperienceBasis} from './experiences.ts';
 import {IntakeStore} from './intake.ts';
 import type {SaveIntakeSummary} from './intake.ts';
-import {LifecycleControlsStore} from './lifecycle-controls.ts';
+import {LifecycleControlsStore,LifecycleSummaryStore} from './lifecycle-controls.ts';
+import type {LifecycleSummaryFact} from './lifecycle-controls.ts';
 import type {NotificationTaskPlan} from './notification-schedules.ts';
 import type {AdmissionPhase, NativeResearchPort, NativeResearchHandle, RunBinding, NativeOpenOptions} from '../runtime/index.ts';
 
@@ -38,8 +39,8 @@ export interface ResearchOptions {
   grants?:Readonly<Record<string,readonly SourceGrant[]>>;protectedDirectories?:readonly string[];
   notificationDefaults?:BriefPreferences;
 }
-interface Unit {engine:Engine;db:EngineStore;sources:SourceStore;artifacts:ArtifactStore;followups:FollowupStore;decisions:DecisionStore;notifications:NotificationStore;notificationSchedules:NotificationSchedules;outcomes:OutcomeStore;cognition:CognitionStore;experiences:ExperienceStore;intake:IntakeStore;lifecycleControls:LifecycleControlsStore;}
-interface Run {key:string;binding:RunBinding;sessionId:string;schedules:string[];state:string;scheduleState?:'unknown'|'known';}
+interface Unit {engine:Engine;db:EngineStore;sources:SourceStore;artifacts:ArtifactStore;followups:FollowupStore;decisions:DecisionStore;notifications:NotificationStore;notificationSchedules:NotificationSchedules;outcomes:OutcomeStore;cognition:CognitionStore;experiences:ExperienceStore;intake:IntakeStore;lifecycleControls:LifecycleControlsStore;lifecycleSummaries:LifecycleSummaryStore;}
+interface Run {key:string;binding:RunBinding;sessionId:string;schedules:string[];state:string;scheduleState?:'unknown'|'known';interruptRevision?:number;}
 interface Live {run:Run;handle:NativeResearchHandle;}
 const digest=(x:unknown)=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const object=(x:unknown):Record<string,unknown>=>{if(!x||typeof x!=='object'||Array.isArray(x))throw new StoreError('invalid_tool_input','工具输入须为对象。');return x as Record<string,unknown>;};
@@ -74,7 +75,7 @@ export class ResearchCoordinator {
     this.status=input.model?{status:'configured',message:'持续研究环境已接通；进展和判断以已保存工单及报告为准。'}:{status:'unconfigured',message:'研究环境尚未就绪；委托和历史已保存，尚未派发研究。'};
     this.controlPort={status:this.status,settle:async({delegation,operation,isCurrent})=>{
       await this.#queue(async()=>{await this.#retire(delegation.id);});
-      if(operation.action==='resume')setImmediate(()=>this.changed(delegation.id));
+      setImmediate(()=>this.changed(delegation.id));
       if(!isCurrent())return {outcome:'unknown',evidence:'控制资格已变化；旧回执不确认当前状态。'};
       return operation.action==='resume'
         ?{outcome:input.model?'eligible':'unavailable',evidence:input.model?'原有资源已收束；恢复资格具备，业务状态提交后继续研究。':'未配置模型；没有研究派发。'}
@@ -101,19 +102,20 @@ export class ResearchCoordinator {
     const cognition=new CognitionStore(this.#o.store,{owner:this.#o.owner,delegationId:id},{isCurrent:b=>this.#admit(b),currentEpoch:()=>sources.qualificationEpoch(),isLatestPlan:(ref,goalRevision)=>artifacts.isCurrentGoalReference(ref,goalRevision),artifactKind:ref=>artifacts.history().find(item=>item.artifactId===ref.artifactId&&item.version===ref.version)?.kind,verifyArtifact:async(b,ref)=>artifacts.reassessment(b,ref),verifyTrigger:async(b,trigger)=>this.#verifyCognitionTrigger(b,trigger),revalidateTrigger:(b,trigger)=>this.#cognitionTriggerCurrent(b,trigger)});
     const intake=new IntakeStore(this.#o.store,{owner:this.#o.owner,delegationId:id},{isCurrent:b=>this.#admit(b),experienceExactCurrent:ref=>experiences.isExactCurrent(ref)});
     const lifecycleControls=new LifecycleControlsStore(this.#o.store,{owner:this.#o.owner,delegationId:id});
+    const lifecycleSummaries=new LifecycleSummaryStore(this.#o.store,{owner:this.#o.owner,delegationId:id});
     const experiences=new ExperienceStore(this.#o.store,{owner:this.#o.owner,delegationId:id},{isCurrent:b=>this.#admit(b),currentEpoch:()=>sources.qualificationEpoch(),verifyEvidence:async(b,refs)=>{for(const ref of refs){const current=sources.listReferences().find(item=>item.hash===ref.hash);if(!current)throw new StoreError('experience_source_unavailable','经验的准确来源片段当前不可用。',409);await sources.readExact(current.ref,ref.hash);}if(!this.#admit(b))throw new StoreError('experience_unqualified','经验的来源资格已变化。',409);this.#trackExperienceEvidence(b,refs);},verifyBasis:async(b,basis)=>this.#verifyExperienceBasis(b,basis),verifyArtifact:async(b,ref)=>{const value=await artifacts.reassessment(b,ref);if(value.status!=='qualified')throw new StoreError('experience_artifact_unavailable','经验影响成果当前不可准确读回。',409);},evidenceCurrent:refs=>{const current=new Set(sources.listReferences().map(ref=>ref.hash));return refs.every(ref=>current.has(ref.hash));},evidenceCurrentInDelegation:(delegationId,refs)=>{const origin=this.#unit(delegationId);const current=new Set(origin.sources.listReferences().map(ref=>ref.hash));return refs.every(ref=>current.has(ref.hash));}});
     const notificationSchedules=new NotificationSchedules(this.#o.store,{owner:this.#o.owner,delegationId:id},{isCurrent:b=>this.#admit(b),defaults:this.#o.notificationDefaults});
     const notifications=new NotificationStore(this.#o.store,{owner:this.#o.owner,delegationId:id},{isCurrent:b=>this.#admit(b),currentEpoch:()=>sources.qualificationEpoch(),isArtifactCurrent:(ref,q)=>artifacts.isCurrentBusinessReference(ref,q),verifyArtifact:async(b,ref)=>{const value=await artifacts.read(b,ref);this.#trackEvidence(b,value.content.evidence);return value;},decisionCurrent:(ref,q)=>{const d=decisions.get(ref.id,ref.revision);return Boolean(d&&d.qualification==='current'&&d.goalRevision===q.goalRevision&&d.epoch===q.epoch&&['pending','deferred'].includes(d.status));},verifyDecision:(b,ref)=>decisions.read(b,ref),preferences:()=>notificationSchedules.preferences()});
-    const unit={engine,db,sources,artifacts,followups,decisions,notifications,notificationSchedules,outcomes,cognition,experiences,intake,lifecycleControls};this.#units.set(id,unit);this.#o.controls?.ensureDefaults(id);return unit;
+    const unit={engine,db,sources,artifacts,followups,decisions,notifications,notificationSchedules,outcomes,cognition,experiences,intake,lifecycleControls,lifecycleSummaries};this.#units.set(id,unit);this.#o.controls?.ensureDefaults(id);return unit;
   }
   #queue(work:()=>Promise<void>):Promise<void> {const next=this.#work.then(work);this.#work=next.catch(()=>{});return next;}
   changed(id:string):void {void this.sync(id).catch((error:unknown)=>{this.#fact(id,'reconcile_failed',{status:'unknown',type:error instanceof Error?error.name:'unknown',code:error instanceof StoreError?error.code:undefined,reason:'Host after-commit reconciliation failed; no blind replay.'});});}
   configureSources(id:string,grants:readonly SourceGrant[]):void {this.#unit(id).sources.configureGrants(grants);this.changed(id);}
   configureNotificationPreferences(id:string,input:BriefPreferences,expectedRevision:number):BriefPreferences{const value=this.#unit(id).notificationSchedules.configure(input,expectedRevision);this.changed(id);return value;}
-  pauseResearch(id:string,input:Omit<Parameters<LifecycleControlsStore['pauseResearch']>[0],'expectedRevision'>&{expectedRevision?:number;expectedVersion?:number}):ReturnType<LifecycleControlsStore['status']>{const value=this.#unit(id).lifecycleControls.pauseResearch({...input,expectedRevision:input.expectedRevision??input.expectedVersion??0});this.changed(id);return value;}
-  resumeResearch(id:string,input:Omit<Parameters<LifecycleControlsStore['resumeResearch']>[0],'expectedRevision'>&{expectedRevision?:number;expectedVersion?:number}):ReturnType<LifecycleControlsStore['status']>{const value=this.#unit(id).lifecycleControls.resumeResearch({...input,expectedRevision:input.expectedRevision??input.expectedVersion??0});this.changed(id);return value;}
-  async scheduleResume(id:string,input:{expectedRevision:number;at:string;reason:string;idempotencyKey:string}){const u=this.#unit(id),main=await this.#ensure(id,'main'),plan=u.lifecycleControls.schedulePlan(main.run.binding,{requestId:input.idempotencyKey,at:input.at,reason:input.reason,kind:'resume'});await this.#applyLifecyclePlans(main);return u.lifecycleControls.plan(plan.id)!;}
-  async scheduleEnd(id:string,input:{expectedRevision:number;at:string;reason:string;idempotencyKey:string}){const u=this.#unit(id),main=await this.#ensure(id,'main'),plan=u.lifecycleControls.schedulePlan(main.run.binding,{requestId:input.idempotencyKey,at:input.at,reason:input.reason,kind:'end'});await this.#applyLifecyclePlans(main);return u.lifecycleControls.plan(plan.id)!;}
+  pauseResearch(id:string,input:Omit<Parameters<LifecycleControlsStore['pauseResearch']>[0],'expectedRevision'>&{expectedRevision?:number;expectedVersion?:number}):ReturnType<LifecycleControlsStore['status']>{const {expectedVersion,...rest}=input,value=this.#unit(id).lifecycleControls.pauseResearch({...rest,expectedRevision:input.expectedRevision??expectedVersion??0});this.changed(id);return value;}
+  resumeResearch(id:string,input:Omit<Parameters<LifecycleControlsStore['resumeResearch']>[0],'expectedRevision'>&{expectedRevision?:number;expectedVersion?:number}):ReturnType<LifecycleControlsStore['status']>{const {expectedVersion,...rest}=input,value=this.#unit(id).lifecycleControls.resumeResearch({...rest,expectedRevision:input.expectedRevision??expectedVersion??0});this.changed(id);return value;}
+  async scheduleResume(id:string,input:{expectedRevision:number;at:string;reason:string;idempotencyKey:string}){const u=this.#unit(id),main=await this.#ensure(id,'main'),plan=u.lifecycleControls.schedulePlan(main.run.binding,{expectedRevision:input.expectedRevision,requestId:input.idempotencyKey,at:input.at,reason:input.reason,kind:'resume'});await this.#applyLifecyclePlans(main);return u.lifecycleControls.plan(plan.id)!;}
+  async scheduleEnd(id:string,input:{expectedRevision:number;at:string;reason:string;idempotencyKey:string}){const u=this.#unit(id),main=await this.#ensure(id,'main'),plan=u.lifecycleControls.schedulePlan(main.run.binding,{expectedRevision:input.expectedRevision,requestId:input.idempotencyKey,at:input.at,reason:input.reason,kind:'end'});await this.#applyLifecyclePlans(main);return u.lifecycleControls.plan(plan.id)!;}
   async respondDecision(id:string,input:OperatorResponseInput) {
     this.#o.store.scope(this.#o.owner,id);
     // Refresh source qualification before accepting a business choice. The durable human record
@@ -121,16 +123,26 @@ export class ResearchCoordinator {
     await this.#scanSources(id);
     return this.#unit(id).decisions.respond(input);
   }
-  async #scanSources(id:string):Promise<void> {const u=this.#unit(id);await u.sources.scan((event,context)=>{u.engine.receive(this.#sourceTrigger(id,event));u.followups.recordSourceEvent({eventId:event.eventId,sourceId:event.sourceId,observedAt:event.observedAt},{goalRevision:this.#o.store.scope(this.#o.owner,id).goalRevision,epoch:context.qualificationEpoch});});}
+  async #scanSources(id:string):Promise<void> {
+    if(this.#get(id).lifecycle!=='active')return;
+    const origin=this.#unit(id),shared=new Set(origin.sources.sourceIds()),cycle=SourceStore.createCollectionCycle();
+    const participants=this.#o.store.list(this.#o.owner).filter(item=>item.lifecycle==='active'&&(item.id===id||this.#unit(item.id).sources.sourceIds().some(sourceId=>shared.has(sourceId))));
+    for(const item of participants){
+      const u=this.#unit(item.id);
+      await u.sources.scan((event,context)=>{u.engine.receive(this.#sourceTrigger(item.id,event));u.followups.recordSourceEvent({eventId:event.eventId,sourceId:event.sourceId,observedAt:event.observedAt},{goalRevision:this.#o.store.scope(this.#o.owner,item.id).goalRevision,epoch:context.qualificationEpoch});},cycle);
+      if(item.id!==id)void this.#queue(()=>this.#sync(item.id,false)).catch((error:unknown)=>{this.#fact(item.id,'reconcile_failed',{status:'unknown',type:error instanceof Error?error.name:'unknown',code:error instanceof StoreError?error.code:undefined,reason:'Host after-commit reconciliation failed; no blind replay.'});});
+    }
+  }
   async start():Promise<void> {for(const d of this.#o.store.list(this.#o.owner))await this.sync(d.id);}
   sync(id:string):Promise<void> {return this.#queue(()=>this.#sync(id));}
-  async #sync(id:string):Promise<void> {
+  async #sync(id:string,scanSources=true):Promise<void> {
     if(this.#closing||await this.#applyDueLifecyclePlans(id))return;
     let d=this.#get(id);const u=this.#unit(id);
-    if(d.lifecycle!=='active') {await this.#retire(id);return;}
-    await this.#scanSources(id);
-    d=this.#get(id);if(d.lifecycle!=='active')return;
+    if(d.lifecycle!=='active') {if(d.lifecycle==='ended')this.#recordEndSummary(id);await this.#retire(id);return;}
+    if(scanSources)await this.#scanSources(id);
+    d=this.#get(id);if(d.lifecycle==='ended'){this.#recordEndSummary(id);await this.#retire(id);return;}if(d.lifecycle!=='active')return;
     if(await this.#applyDueLifecyclePlans(id))return;
+    this.#recordResumeSummary(id);
     this.#o.store.withTransaction(()=>{const prior=this.#o.store.connection.prepare('SELECT version FROM research_policy WHERE delegation_id=?').get(id)?.version;
       if(prior!==undefined&&prior!==d.goalRevision)u.engine.policyChanged(String(prior),String(d.goalRevision));
       this.#o.store.connection.prepare('INSERT INTO research_policy VALUES (?,?) ON CONFLICT(delegation_id) DO UPDATE SET version=excluded.version').run(id,d.goalRevision);});
@@ -151,7 +163,7 @@ export class ResearchCoordinator {
         const ticket=u.db.repo.tickets.open().find(item=>item.assignments.at(-1)?.id===live.run.binding.assignmentId);
         if(control.pausedScopes.length===0||u.lifecycleControls.blocksScope(ticket?.mandate.scope))await this.#closeRun(live);
       }
-      if(control.pausedScopes.length===0){await this.#applyLifecyclePlans(main);return;}
+      if(control.pausedScopes.length===0){await this.#interruptForPause(main,control.revision);await this.#applyLifecyclePlans(main);return;}
     }
     await this.#applyFollowups(main);
     await this.#applyNotificationSchedules(main);
@@ -215,6 +227,7 @@ export class ResearchCoordinator {
         this.#fact(id,'lifecycle_end_due',{planId:endPlan.id,at:endPlan.at,reason:endPlan.reason});
       }
     });
+    if(stopConfirmed)this.#recordEndSummary(id);
     return true;
   }
   async verifyModelInput(binding:RunBinding):Promise<void> {
@@ -547,6 +560,11 @@ export class ResearchCoordinator {
     // lifecycle reconciliation can call Schedule.edit and must run after the resolver is allowed to return.
     await this.#scanSources(id);this.changed(id);
   }
+  async #interruptForPause(live:Live,revision:number):Promise<void> {
+    if(!live.handle.interrupt||live.run.interruptRevision===revision)return;
+    try{live.handle.interrupt('research_paused');await live.handle.whenIdle();live.run.interruptRevision=revision;this.#saveRun(live.run);this.#fact(live.run.binding.delegationId,'research_interrupted',{role:live.run.binding.role,generation:live.run.binding.generation,controlRevision:revision});}
+    catch(error){live.run.state='unknown';this.#saveRun(live.run);this.#fact(live.run.binding.delegationId,'research_interrupt_unknown',{role:live.run.binding.role,generation:live.run.binding.generation});throw new StoreError('research_interrupt_unknown','在途主研究停止结果尚未确认；保留 UNKNOWN。',409);}
+  }
   async #closeRun(live:Live):Promise<void> {
     live.run.state='retiring';this.#saveRun(live.run);live.handle.cancel();
     const errors:unknown[]=live.run.scheduleState==='unknown'?[new Error('Native Schedule creation remains unknown')]:[];
@@ -592,6 +610,55 @@ export class ResearchCoordinator {
     this.#unit(id).notificationSchedules.pause();
     if(errors.length)throw new AggregateError(errors,'Native resources not confirmed stopped');
   }
+  #changesSince(id:string,since:string):LifecycleSummaryFact[] {
+    const u=this.#unit(id),facts:LifecycleSummaryFact[]=[];
+    for(const change of u.sources.changesSince(since))facts.push({kind:`source_${change.kind}`,id:change.latestEventId,at:change.latestObservedAt,detail:`${change.sourceId} · ${change.count} 次${change.collectionId?` · 采集 ${change.collectionId}`:''}`});
+    const reports=this.#o.store.connection.prepare('SELECT ticket_id,count(*) AS count,max(created_at) AS latest FROM research_reports WHERE delegation_id=? AND created_at>=? GROUP BY ticket_id').all(id,since) as unknown as{ticket_id:string;count:number;latest:string}[];
+    for(const report of reports){const latest=this.#o.store.connection.prepare('SELECT id FROM research_reports WHERE delegation_id=? AND ticket_id=? AND created_at=? ORDER BY rowid DESC LIMIT 1').get(id,report.ticket_id,report.latest) as{id:string};facts.push({kind:'research_reports',id:latest.id,at:report.latest,detail:`工单 ${report.ticket_id} · ${report.count} 份`});}
+    const messages=this.#get(id).messages.filter(message=>message.createdAt>=since);
+    if(messages.length)facts.push({kind:'operator_messages',id:messages.at(-1)!.id,at:messages.at(-1)!.createdAt,detail:`${messages.length} 条负责人补充`});
+    return facts;
+  }
+  #recordResumeSummary(id:string):void {
+    const d=this.#get(id),u=this.#unit(id),control=u.lifecycleControls.status(),transition=control.lastTransition;
+    const activity=d.activity.filter(item=>item.kind==='lifecycle_completed'&&item.detail.action==='resume').at(-1);
+    const candidates=[...(activity?[{at:activity.createdAt,kind:'delegation' as const,key:String(activity.detail.operationId),activity}]:[]),...(transition?.kind==='resume'?[{at:transition.at,kind:'control' as const,key:`r${control.revision}`,transition}]:[])].sort((a,b)=>a.at.localeCompare(b.at));
+    const selected=candidates.at(-1);if(!selected)return;
+    if(transition?.kind==='pause'&&transition.at>selected.at)return;
+    const since=selected.kind==='control'?selected.transition!.since:d.activity.filter(item=>item.kind==='lifecycle_requested'&&item.detail.action==='pause'&&(!activity||item.seq<activity.seq)).at(-1)?.createdAt??d.createdAt;
+    const gaps:LifecycleSummaryFact[]=u.sources.coverage().filter(source=>source.status!=='ready').map(source=>({kind:'source_gap',id:source.sourceId,at:source.lastCheckedAt??undefined,detail:`${source.status}${source.reason?` · ${source.reason}`:''}`}));
+    const intake=u.intake.latest();if(intake&&(intake.epoch!==u.sources.qualificationEpoch()||intake.goalRevision!==d.goalRevision))gaps.push({kind:'intake_recheck',id:`${intake.id}@r${intake.revision}`,at:intake.createdAt,detail:'旧摘要待按当前资格重核'});
+    const eligible:LifecycleSummaryFact[]=u.sources.coverage().filter(source=>source.status==='ready').map(source=>({kind:'source_ready',id:source.sourceId,at:source.lastCheckedAt??undefined,detail:`授权修订 ${source.grantRevision}`}));
+    eligible.push({kind:'model',id:this.#o.model?'configured':'unconfigured',detail:this.#o.model?'合成/获准模型引用已配置':'研究运行资格未配置'});
+    const continuations:LifecycleSummaryFact[]=[],waiting:LifecycleSummaryFact[]=[];
+    for(const ticket of u.db.repo.tickets.open()){const fact={kind:'ticket',id:ticket.id,detail:ticket.mandate.scope};if(ticket.mandate.policyVersion===String(d.goalRevision)&&!u.lifecycleControls.blocksScope(ticket.mandate.scope))continuations.push(fact);else waiting.push({...fact,detail:`${ticket.mandate.scope} · 等待当前资格`});}
+    for(const decision of u.decisions.list().filter(item=>item.qualification==='current'&&['pending','deferred'].includes(item.status)))waiting.push({kind:'decision',id:`${decision.id}@r${decision.revision}`,at:decision.window.decideBy,detail:decision.status});
+    for(const run of this.#runRows(id).filter(run=>run.state==='unknown'||run.scheduleState==='unknown'))waiting.push({kind:'unknown_resource',id:`${run.key}@${run.binding.generation}`,detail:run.state});
+    u.lifecycleSummaries.record(selected.key,'resume',since,{changes:this.#changesSince(id,since),gaps,eligible,continuations,waiting});
+  }
+  #recordEndSummary(id:string):void {
+    const d=this.#get(id);if(d.lifecycle!=='ended')return;const activity=d.activity.filter(item=>item.kind==='lifecycle_completed'&&item.detail.action==='end').at(-1);if(!activity)return;
+    const u=this.#unit(id),fact=(kind:string,identity:string,at?:string,detail?:string):LifecycleSummaryFact=>({kind,id:identity,...(at?{at}:{}),...(detail?{detail}:{})});
+    const plans=u.artifacts.history().filter(item=>item.kind==='plan').map(item=>fact('plan',`${item.artifactId}@v${item.version}`,item.createdAt,`委托 v${item.goalRevision}`));
+    const choices=u.decisions.choices().map(item=>fact('choice',item.id,item.createdAt,`${item.action} · ${item.artifact.artifactId}@v${item.artifact.version}`));
+    const outcomes=u.outcomes.projection();
+    const executions=outcomes.executions.map(item=>fact('execution',`${item.id}@r${item.revision}`,item.createdAt,item.qualification));
+    const observations=outcomes.observations.map(item=>fact('observation',`${item.id}@r${item.revision}`,item.createdAt,item.qualification));
+    const reports=this.#o.store.connection.prepare("SELECT id,created_at,value FROM research_reports WHERE delegation_id=? AND json_extract(value,'$.state') IN ('failed','blocked') ORDER BY created_at").all(id) as unknown as{id:string;created_at:string;value:string}[];
+    const failures:LifecycleSummaryFact[]=reports.map(row=>{const value=JSON.parse(row.value);return fact('research_failure',value.id,row.created_at,value.state);});
+    for(const row of this.#o.store.connection.prepare("SELECT kind,created_at,detail FROM research_facts WHERE delegation_id=? AND kind IN ('native_failure','reconcile_failed','resource_stop_unknown','schedule_refresh_failure') ORDER BY seq").all(id) as unknown as{kind:string;created_at:string;detail:string}[]){const detail=JSON.parse(row.detail);failures.push(fact(row.kind,`${row.kind}@${row.created_at}`,row.created_at,detail.code??detail.type??'failed'));}
+    const unknowns:LifecycleSummaryFact[]=[];
+    if(d.pendingOperation?.outcome==='unknown')unknowns.push(fact('lifecycle_unknown',d.pendingOperation.id,d.pendingOperation.requestedAt,d.pendingOperation.action));
+    for(const run of this.#runRows(id))if(run.state==='unknown'||run.scheduleState==='unknown')unknowns.push(fact('resource_unknown',`${run.key}@${run.binding.generation}`,undefined,run.state));
+    for(const item of u.followups.list())if(['creating','unknown'].includes(item.schedule.status))unknowns.push(fact('followup_unknown',item.id,undefined,item.schedule.status));
+    for(const item of u.notificationSchedules.list())if(['creating','unknown'].includes(item.schedule.status))unknowns.push(fact('notification_unknown',item.id,undefined,item.schedule.status));
+    for(const item of u.db.listUnsettled())unknowns.push(fact('delivery_unknown',item.id,item.createdAt,item.state));
+    const pending:LifecycleSummaryFact[]=[];
+    for(const ticket of u.db.repo.tickets.open())pending.push(fact('open_ticket',ticket.id,undefined,ticket.assignments.at(-1)?.report?.state??'delegation_ended'));
+    for(const decision of u.decisions.list())if(['pending','deferred'].includes(decision.status)||String(decision.closureReason??'').startsWith('delegation_'))pending.push(fact('decision',`${decision.id}@r${decision.revision}`,decision.window.decideBy,decision.closureReason??decision.status));
+    for(const item of u.followups.list())if(['waiting','due'].includes(item.status))pending.push(fact('followup',item.id,undefined,item.status));
+    u.lifecycleSummaries.record(String(activity.detail.operationId),'end',d.createdAt,{plans,choices,executions,observations,failures,unknowns,pending});
+  }
   detail(id:string):Record<string,unknown> {
     const d=this.#get(id);
     const u=this.#unit(id);const reports=this.#o.store.connection.prepare('SELECT value FROM research_reports WHERE delegation_id=? ORDER BY created_at').all(id).map(row=>JSON.parse(row.value as string));
@@ -602,7 +669,7 @@ export class ResearchCoordinator {
     const decisions=u.decisions.list();
     const researchStatus=d.lifecycle!=='active'?{status:d.lifecycle}:unknownResource?{status:'unknown',reason:'部分原生资源或停止回执未确认；该部分隔离，未盲重放。'}:!this.#o.model?{status:'unconfigured'}:resourceStatus?.modelDispatch==='waiting_resources'&&resourceStatus.activeModelRequests===0?{status:'waiting',reason:resourceStatus.block??'研究资源尚未就绪；原委托及证据保留。'}:main?.state==='current'?{status:'following'}:{status:'not_started',reason:'等待提交后的原生资源接线。'};
     const intakeBinding={owner:this.#o.owner,delegationId:id,goalRevision:d.goalRevision,epoch:u.sources.qualificationEpoch(),generation:main?.binding.generation??1,role:'main' as const};
-    return {researchStatus,hostResources:resourceStatus,effectAssessments:this.#effectAssessments(id),outcomeFeed:this.#outcomeFeed(id),intake:u.intake.projection(intakeBinding),cognition:u.cognition.projection(intakeBinding),experiences:u.experiences.projection(id),lifecycleControls:{status:u.lifecycleControls.status(),plans:u.lifecycleControls.plans()},notificationFeed:u.notifications.projection(),notificationSchedules:u.notificationSchedules.list(),notificationPreferences:u.notificationSchedules.preferences(),decisions,decisionResponses:decisions.flatMap(item=>item.responses),operatorChoices:u.decisions.choices(),pendingDecisions:decisions.filter(item=>item.qualification==='current'&&['pending','deferred'].includes(item.status)&&d.lifecycle==='active').map(item=>({id:item.id,revision:item.revision,title:item.title,question:item.question,artifact:item.artifact})),research:u.db.repo.tickets.list().map(t=>{const last=reports.filter(r=>r.ticketId===t.id).at(-1);return {...t,qualification:t.mandate.policyVersion===String(d.goalRevision)?'current':'historical',reportQualification:last?.goalRevision===d.goalRevision&&last?.epoch===u.sources.qualificationEpoch()?'current':'historical'};}),artifacts:reports.map(r=>({...r,qualification:r.goalRevision===d.goalRevision&&r.epoch===u.sources.qualificationEpoch()?'current':'historical'})),artifactRevisions:u.artifacts.history().filter(r=>!(r.content.kind==='judgment'&&r.content.effect)).map(r=>({...r,qualification:r.goalRevision===d.goalRevision&&r.epoch===u.sources.qualificationEpoch()?'current':'historical'})),followups:u.followups.list(),sources:u.sources.coverage(),sourceReferences:u.sources.listReferences(),technical,deliveries:[...u.db.listPending(),...u.db.listUnsettled()].map(({id,kind,state,createdAt})=>({id,kind,state,createdAt}))};
+    return {researchStatus,hostResources:resourceStatus,effectAssessments:this.#effectAssessments(id),outcomeFeed:this.#outcomeFeed(id),intake:u.intake.projection(intakeBinding),cognition:u.cognition.projection(intakeBinding),experiences:u.experiences.projection(id),lifecycleControls:{status:u.lifecycleControls.status(),plans:u.lifecycleControls.plans()},lifecycleSummaries:u.lifecycleSummaries.list(),notificationFeed:u.notifications.projection(),notificationSchedules:u.notificationSchedules.list(),notificationPreferences:u.notificationSchedules.preferences(),decisions,decisionResponses:decisions.flatMap(item=>item.responses),operatorChoices:u.decisions.choices(),pendingDecisions:decisions.filter(item=>item.qualification==='current'&&['pending','deferred'].includes(item.status)&&d.lifecycle==='active').map(item=>({id:item.id,revision:item.revision,title:item.title,question:item.question,artifact:item.artifact})),research:u.db.repo.tickets.list().map(t=>{const last=reports.filter(r=>r.ticketId===t.id).at(-1);return {...t,qualification:t.mandate.policyVersion===String(d.goalRevision)?'current':'historical',reportQualification:last?.goalRevision===d.goalRevision&&last?.epoch===u.sources.qualificationEpoch()?'current':'historical'};}),artifacts:reports.map(r=>({...r,qualification:r.goalRevision===d.goalRevision&&r.epoch===u.sources.qualificationEpoch()?'current':'historical'})),artifactRevisions:u.artifacts.history().filter(r=>!(r.content.kind==='judgment'&&r.content.effect)).map(r=>({...r,qualification:r.goalRevision===d.goalRevision&&r.epoch===u.sources.qualificationEpoch()?'current':'historical'})),followups:u.followups.list(),sources:u.sources.coverage(),sourceReferences:u.sources.listReferences(),sourceEvents:u.sources.events(100),technical,deliveries:[...u.db.listPending(),...u.db.listUnsettled()].map(({id,kind,state,createdAt})=>({id,kind,state,createdAt}))};
   }
   async close():Promise<void> {this.#closing=true;await this.#work;for(const live of [...this.#live.values()])await this.#closeRun(live);await this.#o.native.dispose();await this.#work;}
 }

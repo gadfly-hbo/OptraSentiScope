@@ -65,6 +65,8 @@ export interface NativeResearchHandle {
   deliver(message: { readonly id: string; readonly text: string; readonly sourceRefs?: readonly string[] }): Promise<{ readonly messageId: string; readonly accepted: true }>;
   /** Resource causes are native hook cancellations; omission means operator cancellation. */
   cancel(reason?: string): void;
+  /** Abort the active turn without closing future scheduled admission for a research-only pause. */
+  interrupt?(reason?: string): void;
   whenIdle(): Promise<void>;
   /** Closes admission, cancels, awaits quiescence, flushes facts, then disposes the owned native handle. */
   dispose(): Promise<void>;

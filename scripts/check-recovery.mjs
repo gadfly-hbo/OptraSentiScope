@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync, copyFileSync, symlinkSync, openSync, closeSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRuntimeBackup, verifyRuntimeBackup, restoreRuntimeBackup } from '../src/backup.ts';
 
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const root = resolve(project, '.local/recovery-checks', `run-${Date.now()}-${randomUUID()}`);
@@ -18,11 +19,12 @@ mkdirSync(resolve(consumer, 'node_modules'), { recursive: true, mode: 0o700 });
 for (const file of ['recovery-probe.mjs', 'engineering-probe.mjs']) copyFileSync(resolve(project, 'scripts/runtime', file), resolve(consumer, file));
 for (const [name, target] of [['dsh-superagent', source], ['sentiscope-runtime', runtime]]) symlinkSync(target, resolve(consumer, 'node_modules', name));
 save(resolve(consumer, 'package.json'), { name: 'sentiscope-recovery-check', private: true, type: 'module', main: 'recovery-probe.mjs', peerDependencies: { '@deepseek-ai/dsh-llm': '0.2.2-rc.3' }, dependencies: { 'dsh-superagent': `link:${source}`, 'sentiscope-runtime': `link:${runtime}` } });
-const services = [
-  ['credentials', 'dsh-credentials-local', { path: resolve(root, 'data/private/credentials.yaml'), watch: false }], ['llm', 'dsh-llm'], ['session', 'dsh-session'], ['projection', 'dsh-session-projection'], ['prompt', 'dsh-system-prompt'], ['tools', 'dsh-tools'], ['executor', 'dsh-tool-executor-native'], ['agent', 'dsh-agent'], ['loop', 'dsh-agent-loop'],
-  ['persistence', 'dsh-session-persistence-jsonl', { root: resolve(root, 'native/sessions'), compression: 'none' }], ['storage', 'dsh-storage'], ['json', 'dsh-storage-json', { root: resolve(root, 'native/storage') }], ['domain', 'dsh-storage-domain', { backend: 'json' }], ['schedule', 'dsh-schedule'],
-].map(([id, name, config]) => ({ id, name: `@deepseek-ai/${name}`, ...(config ? { config } : {}) }));
 for (const phase of ['first', 'cold']) {
+  const state = resolve(root, phase === 'first' ? 'data' : 'restored');
+  const services = [
+    ['credentials', 'dsh-credentials-local', { path: resolve(state, 'private/credentials.yaml'), watch: false }], ['llm', 'dsh-llm'], ['session', 'dsh-session'], ['projection', 'dsh-session-projection'], ['prompt', 'dsh-system-prompt'], ['tools', 'dsh-tools'], ['executor', 'dsh-tool-executor-native'], ['agent', 'dsh-agent'], ['loop', 'dsh-agent-loop'],
+    ['persistence', 'dsh-session-persistence-jsonl', { root: resolve(state, 'sessions'), compression: 'none' }], ['storage', 'dsh-storage'], ['json', 'dsh-storage-json', { root: resolve(state, 'storage') }], ['domain', 'dsh-storage-domain', { backend: 'json' }], ['schedule', 'dsh-schedule'],
+  ].map(([id, name, config]) => ({ id, name: `@deepseek-ai/${name}`, ...(config ? { config } : {}) }));
   const profile = resolve(home, 'profiles', phase);
   mkdirSync(resolve(profile, 'node_modules'), { recursive: true });
   for (const [name, target] of [['dsh-superagent', source], ['sentiscope-runtime', runtime], ['sentiscope-recovery-check', consumer]]) symlinkSync(target, resolve(profile, 'node_modules', name));
@@ -75,6 +77,13 @@ try {
   assert.equal(firstExit.signal, 'SIGKILL');
   assert.equal(firstExit.code, null);
   result.phases.push({ phase: 'first', status: 'READY_THEN_SIGKILL', process: firstExit, report: resolve(root, 'first-result.json') });
+  const manifest = await createRuntimeBackup(resolve(root, 'data'), resolve(root, 'backup'));
+  const verification = await verifyRuntimeBackup(resolve(root, 'backup'));
+  assert.equal(verification.status, 'ok');
+  await restoreRuntimeBackup(resolve(root, 'backup'), resolve(root, 'restored'));
+  for (const name of ['business.sqlite', 'sessions', 'storage']) assert.equal(existsSync(resolve(root, 'restored', name)), true, `Restored runtime includes ${name}`);
+  if (existsSync(resolve(root, 'data/private'))) assert.equal(existsSync(resolve(root, 'restored/private')), true, 'Existing private credential state is restored');
+  result.phases.push({ phase: 'backup-restore', status: 'PASS', manifest: resolve(root, 'backup/manifest.json'), files: manifest.files.length, restored: resolve(root, 'restored') });
   const cold = await start('cold');
   const coldReport = await waitResult(cold, 110000);
   assert.equal(coldReport.status, 'PASS', JSON.stringify(coldReport.error));

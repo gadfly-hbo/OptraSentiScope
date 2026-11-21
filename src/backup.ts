@@ -31,7 +31,7 @@ export async function createRuntimeBackup(dataDirectory:string,outputDirectory:s
  if(statSync(target,{throwIfNoEntry:false}))throw new StoreError('runtime_backup_exists','备份目录已存在，不能覆盖。',409);
  mkdirSync(target,{recursive:true,mode:0o700});
   const databaseTarget=join(target,'business.sqlite').replaceAll(`'`, `''`);const database=new DatabaseSync(join(source,'business.sqlite'),{readOnly:true});try{database.exec(`VACUUM INTO '${databaseTarget}'`);}finally{database.close();}
- const native=join(source,'native');if(statSync(native,{throwIfNoEntry:false}))cpSync(native,join(target,'native'),{recursive:true,filter:sourcePath=>!sourcePath.endsWith('.lock')});
+ for(const name of ['native','sessions','storage','private']){const directory=join(source,name);if(statSync(directory,{throwIfNoEntry:false}))cpSync(directory,join(target,name),{recursive:true,filter:sourcePath=>!sourcePath.endsWith('.lock')&&!sourcePath.endsWith('-wal')&&!sourcePath.endsWith('-shm')});}
   const paths=files(target).sort();const entries:{path:string;sha256:string;bytes:number}[]=[];
  for(const path of paths)entries.push({path:relative(target,path),sha256:await digest(path),bytes:statSync(path).size});
  const manifest:RuntimeBackupManifest={kind:'runtime-backup-v1',createdAt:new Date().toISOString(),sourceDataDirectory:source,files:entries};writeFileSync(join(target,'manifest.json'),JSON.stringify(manifest,null,2)+'\n',{mode:0o600});return manifest;
