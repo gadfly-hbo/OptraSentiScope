@@ -26,7 +26,7 @@ npm start
 - SDK安装及最小官方消费核验与产品运行分开，见[SDK分项记录](SDK_E1_实际消费核验_v0.1.md)。官方SDK仍保持原实现；合成 Provider 证据不等于真实模型研究质量。
 - 未完成：真实企业来源与更新/撤权时限、真实模型质量、Call接缝、实际计算与出口隔离、生产认证／部署、经营 POC 和完整首版验收。
 
-CI逐字节复用核对到的OptraCall单`check` job，运行根项目锁定依赖的安装、`npm run check`及`npm audit --audit-level=high`。本地检查不是GitHub CI PASS；本轮未推送或合并，也未部署。SDK私有核验的原包FAIL与未运行项单列，不能由自有测试全绿抹去。
+CI逐字节复用核对到的OptraCall单`check` job，运行根项目锁定依赖的安装、`npm run check`及`npm audit --audit-level=high`。本地检查不是GitHub CI PASS；交付时分别核对实际 PR head 与合并后 main CI。SDK私有核验的原包FAIL与未运行项单列，不能由自有测试全绿抹去。
 
 ## 后续官方运行入口
 
