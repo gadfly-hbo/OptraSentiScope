@@ -28,6 +28,7 @@ OptraCall 的同源项目。用户已确认通用首版搭建规格和UI Demo并
 - [成人服饰线下渠道会员运营 POC（后续优先，细节暂缓）](docs/poc/adult-apparel-offline-member-operations-v0.1.md)
 - [成人服饰单店 POC 场景基线 v0.1（已确认，仅保留备选）](docs/poc/adult-apparel-store-v0.1/README.md) · [用户确认记录](docs/poc/adult-apparel-store-v0.1-approval.md)
 - [下一阶段开发计划（P03–P05 已确认范围、验收清单与 Qoder 交接 prompt）](docs/P03-P05_下一阶段开发计划.md)
+- [P03–P05 当前工程规格与逐项结果](openspec/changes/p03-p05-sustained-sources/results.md)
 - [工程入口](AGENTS.md)
 - [开发流程规范](docs/engineering-workflow.md)
 - [分析类 Skill 编写规范](docs/分析类Skill编写规范.md)

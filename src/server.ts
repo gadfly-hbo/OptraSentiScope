@@ -8,12 +8,16 @@ import type { LifecycleControlPort } from './control.ts';
 import { ControlDelivery, inactiveControlPort } from './control.ts';
 import { acquireHostLease } from './lease.ts';
 import type {OperatorResponseInput} from './decisions.ts';
+import {LocalAuth} from './auth.ts';
+import type {LocalAuthConfig,LocalSession} from './auth.ts';
 
 export interface LocalHostOptions {
   store: SentiStore;
   owner: Owner;
   port?: number;
   controlPort?: LifecycleControlPort;
+  auth?: LocalAuthConfig;
+  allowUnauthenticated?: boolean;
   researchPort?: {
     status: { status: string; message: string };
     detail(id: string): Record<string, unknown>;
@@ -29,6 +33,15 @@ export interface LocalHostOptions {
 
 export async function startLocalHost(options: LocalHostOptions) {
   const owner = Object.freeze({ ...options.owner });
+  if (!options.auth && !options.allowUnauthenticated) throw new StoreError('auth_configuration_required', '本机工作台必须配置经营者与维护者角色令牌哈希。', 503);
+  const auth = options.auth ? new LocalAuth(options.store, owner, options.auth) : undefined;
+  const cookie = (request: IncomingMessage) => request.headers.cookie?.split(';').map(part => part.trim()).find(part => part.startsWith('sentiscope_session='))?.slice('sentiscope_session='.length);
+  const requireSession = (request: IncomingMessage, role?: LocalSession['role']): LocalSession => {
+    const session = auth ? auth.resolve(cookie(request)) : options.allowUnauthenticated ? { role: 'operator' as const, owner, expiresAt: '' } : undefined;
+    if (!session) throw new StoreError('authentication_required', '请先登录本机工作台。', 401);
+    if (role && session.role !== role) throw new StoreError('permission_denied', '当前角色不能访问该入口。', 403);
+    return session;
+  };
   const controlPort = options.controlPort ?? inactiveControlPort;
   const runtime = options.researchPort?.status ?? controlPort.status;
   const release = acquireHostLease(options.store);
@@ -59,6 +72,23 @@ export async function startLocalHost(options: LocalHostOptions) {
       checkLocalRequest(request);
       const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
       if (request.method === 'GET' && pathname === '/api/health') return json(response, 200, { status: 'ok', mode: 'local-development', runtime, call: 'not_connected' });
+      if (request.method === 'POST' && pathname === '/api/login') {
+        if (!auth) throw new StoreError('auth_unavailable', '当前工程夹具未启用本机登录。', 503);
+        const body = await readObject(request); onlyFields(body, ['token']);
+        const result = auth.login(String(body.token), request.socket.remoteAddress ?? 'local');
+        response.setHeader('Set-Cookie', `sentiscope_session=${result.token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${auth.sessionTtlSeconds}`);
+        return json(response, 200, result.session);
+      }
+      if (request.method === 'POST' && pathname === '/api/logout') {
+        auth?.logout(cookie(request)); response.setHeader('Set-Cookie', 'sentiscope_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+        return json(response, 200, { status: 'ok' });
+      }
+      if (request.method === 'GET' && pathname === '/api/session') return json(response, 200, requireSession(request));
+      if (request.method === 'GET' && pathname === '/api/maintenance') {
+        requireSession(request, 'maintainer');
+        return json(response, 200, { status: 'ok', runtime, call: 'not_connected', compute: 'off', egress: { externalResearch: 'disabled', notifications: 'disabled', exports: 'disabled', telemetry: 'disabled', backups: 'disabled' } });
+      }
+      if (pathname.startsWith('/api/delegations')) requireSession(request, 'operator');
       const staticFiles: Record<string, { file: string; mime: string }> = {
         '/': { file: 'index.html', mime: 'text/html' },
         '/index.html': { file: 'index.html', mime: 'text/html' },

@@ -1,11 +1,11 @@
 # P03–P05 结果记录
 
-2026-11-21 开工。当前为独立复核修复候选：R2 的非作者 Spec／Standards FAIL 已逐项处理，R02 本机登录差异 spec＋Demo 已提交用户确认，尚未完成最终独立重验、PR/CI、合并或试用切换。历史 PASS 只按原范围引用，不代替本候选证据。
+2026-11-21 开工。当前为 R2/R3 独立复核修复候选：撤权、并发、摘要、写入放大和实际旧版恢复已处理；R02 修正版 UI Demo 获用户确认后已实施本机登录/角色。尚未完成最终独立重验、PR/CI、合并或试用切换。历史 PASS 只按原范围引用，不代替本候选证据。
 
 ## 基线事实
 
 - Git：`main`/`origin/main` 为 `32b4e00450d069cd254fb33fe0710cf3f0925b86`，已建立 `qoder/p03-p05-sustained-sources`。
-- 基线检查：`npm test` 295/295 与 `npm run typecheck` PASS；R2 修复后当前完整单测为 309/309 PASS，类型检查 PASS。
+- 基线检查：`npm test` 295/295 与 `npm run typecheck` PASS；R2/R3 修复与 R02 实施后当前完整单测为 315/315 PASS，类型检查 PASS。
 - 试用服务：开工时 `127.0.0.1:8766` 无监听，未发现匹配产品进程；`.local/service-trial-20261120/host.json` 指定 owner `local-trial/local-operator` 和独立数据目录。旧 `service-proof.json` 只证明 2026-11-20 的 `6ec330d` 运行，不代表当前状态。
 - 官方组件：保持 Harness `0.2.2-rc.3` 与 superagent `8c32a9dc5d72c033816c6a8110b37f40cf94fba4`，未升级或改包。`npm run check:sdk` PASS：`.local/sdk-checks/run-1795231934530-3e53e2b1-3528-4ba4-ba58-eda867c8e7c5/result.json`。
 
@@ -18,9 +18,9 @@
 | P03 失联、恢复、单方撤权与遮蔽 | PASS（合成工程范围） | 同一 `collectionId` 分发、独立 eventId、失联/恢复补读、单方撤权后另一方 version four 继续；旧会话不回放新正文 |
 | P04 在途收束、UNKNOWN、恢复/结束摘要 | PASS（合成工程范围） | 同一官方链含暂停采集中断、采集继续、恢复摘要、原生定时结束和迟到不复活；`runtime/lifecycle-summaries.test.mjs` 另覆盖主/worker/无关方向及方案/选择/执行/观察 |
 | P04 U01–U12 浏览器 | PASS（工程 UI 范围，待用户产品体验） | 见下方 U 矩阵；真实外部浏览器、HTTP 与 SQLite，窄屏/键盘/断连分别留证 |
-| P05 owner/凭据/出口/计算 OFF/SDK | PASS（本机合成边界；生产项 NOT_RUN） | `.local/host-controls-checks/run-1795232007281-a25e4dd4-6bd9-4aea-8bea-cf4cfc68c925/runner-result.json`；含实际官方 Engine worker 的 `run_compute` 拒绝 |
+| P05 owner/凭据/出口/计算 OFF/SDK | PASS（本机合成边界；生产项 NOT_RUN） | `.local/host-controls-checks/run-1795245935638-260f0873-e4ba-4576-a205-3d34c06f8929/runner-result.json`；含实际官方 Engine worker 的 `run_compute` 拒绝。R02 本机登录/角色见 `test/server-auth.test.ts` 与 `.local/auth-ui-checks/run-8TpADq` |
 | P05 跨版本恢复与长流 | PASS（本机隔离范围） | 崩溃后备份恢复 `.local/recovery-checks/run-1795231389680-d4fbd51a-734f-4aae-bccf-f70002e4486c/result.json`；长流 `.local/longstream-checks/run-1795231877280/runner-result.json` |
-| 完整检查与审计 | IN_PROGRESS（R2 修复后） | 309/309 tests 与类型检查 PASS；`check:sources` `.local/shared-source-checks/run-1795238974860`、现行恢复 `.local/recovery-checks/run-1795238985656-9873cac8-462b-4287-824a-69d6007488a8`、原始工程链 `.local/research-checks/run-1795239048975` PASS。R02 完成后重跑完整检查；前一轮完整日志保留于 `.local/p03-p05-candidate/full-check.log` |
+| 完整检查与审计 | PASS（最终候选前） | `npm run check` 全部通过，持久日志 `.local/p03-p05-candidate/full-check-final.log`；315/315 tests；`npm audit --audit-level=high` PASS，0 vulnerabilities；真实浏览器 U01–U12、登录与撤权路径分别 PASS |
 | 独立复核与四原则最终检查 | NOT_RUN | 固定候选后由全新上下文非作者执行 |
 | PR、两次 CI、合并与试用切换 | NOT_RUN | 已获本轮授权，独立复核后执行 |
 
@@ -41,37 +41,47 @@
 
 | 路径 | 状态 | 真实浏览器证据 |
 | --- | --- | --- |
-| U01 一句话建立／空态 | PASS | `.local/ui-checks/run-g475d9`、`.local/general-ui-checks/run-5qh1b5`；正常 HTTP 建立与摘要。 |
-| U02 离开返回／持续推进 | PASS | `.local/lifecycle-ui-checks/run-5x97yP`：关闭并重开浏览器读回摘要；官方链另证原生 Schedule。 |
+| U01 一句话建立／空态 | PASS | `.local/ui-checks/run-R0RlGn`、`.local/general-ui-checks/run-SR7yaq`；正常 HTTP 建立与摘要。 |
+| U02 离开返回／持续推进 | PASS | `.local/lifecycle-ui-checks/run-hpjGr4`：关闭并重开浏览器读回摘要；官方链另证原生 Schedule。 |
 | U03 新信息／重复投递 | PASS | 上述生命周期 UI＋官方共享来源链：双工单、同一采集 ID、重复检查无新事件。 |
-| U04 依据与有限判断 | PASS | `.local/operator-decision-ui-checks/run-qm0Nij`：准确历史版本、依据、未知与键盘焦点。 |
+| U04 依据与有限判断 | PASS | `.local/operator-decision-ui-checks/run-Nbhl59`：准确历史版本、依据、未知与键盘焦点。 |
 | U05 决策及未回复 | PASS | 同上：知悉仍待决、部分/明确采纳、准确版本和窗口。 |
-| U06 结果事实 | PASS | `.local/outcome-ui-checks/run-pgy5Jp`：选择/执行/观察分离、UNKNOWN、缺资料与撤回。 |
-| U07 学习与反证 | PASS（工程展示，不证明业务学习质量） | `.local/effect-ui-checks/run-RsYlRJ`：反证、认识修正、效果判断、经验限制和撤回。 |
-| U08 调整／暂停／恢复／结束 | PASS | `.local/lifecycle-ui-checks/run-5x97yP`＋官方链：暂停/恢复摘要、原生定时结束、迟到不复活。 |
-| U09 来源失联／撤回 | PASS（R2 修复后，待独立重验） | 官方链失联/恢复/单方撤权；`.local/revocation-ui-checks/run-2WqcFJ` 证明进展/方案/资料页均不渲染失权 marker，390px 与浏览器错误检查通过。 |
+| U06 结果事实 | PASS | `.local/outcome-ui-checks/run-1S2AuF`：选择/执行/观察分离、UNKNOWN、缺资料与撤回。 |
+| U07 学习与反证 | PASS（工程展示，不证明业务学习质量） | `.local/effect-ui-checks/run-n0xNP5`：反证、认识修正、效果判断、经验限制和撤回。 |
+| U08 调整／暂停／恢复／结束 | PASS | `.local/lifecycle-ui-checks/run-hpjGr4`＋官方链：暂停/恢复摘要、原生定时结束、迟到不复活。 |
+| U09 来源失联／撤回 | PASS（R2 修复后，待独立重验） | 官方链失联/恢复/单方撤权；`.local/revocation-ui-checks/run-Lpcxwu` 证明进展/方案/资料页均不渲染失权 marker，390px 与浏览器错误检查通过。 |
 | U10 故障／UNKNOWN | PASS | 生命周期 UI 的 UNKNOWN 与断连最后可核实状态；官方恢复链保留 claimed/unknown。 |
 | U11 Call 未接通 | PASS | 工作台持续显示待接入；无 Call 数据或替身接入宣称。 |
 | U12 演示／运行边界 | PASS | 生命周期 UI 显示合成证据、计算 OFF、外部研究/提醒/导出/遥测/备份出口未启用；生产隔离仍 NOT_RUN。 |
 
-提醒与偏好补充：`.local/notification-ui-checks/run-ENL9U3` 验证合并事项仍直达独立决定与窗口；`.local/lifecycle-ui-checks/run-5x97yP` 验证真实 HTTP 保存偏好、轮询保留编辑、浏览器重开及 SQLite 重开读回 `09:00:00`／周六／revision 2。
+提醒与偏好补充：`.local/notification-ui-checks/run-CH8o7A` 验证合并事项仍直达独立决定与窗口；`.local/lifecycle-ui-checks/run-hpjGr4` 验证真实 HTTP 保存偏好、轮询保留编辑、浏览器重开及 SQLite 重开读回 `09:00:00`／周六／revision 2。
 
 ## R01–R06 本机分项
 
 | 运行项 | 状态 | 证据与未运行边界 |
 | --- | --- | --- |
-| R01 维护、备份与恢复 | PASS（R2 修复后，待独立重验）；企业 Linux NOT_RUN | 现行 SIGKILL 恢复见上；实际旧提交 `6ec330d` 生成数据后经当前版本恢复：`.local/recovery-checks/run-1795238630463-5cc23012-8c2f-47a0-add0-16ec11ff6a11/result.json`，读回 SQLite、原 Session、Schedule、游标和 claimed 回执。 |
-| R02 owner 与权限 | PENDING（R2 F02；差异 spec＋Demo 已交用户确认） | 固定 owner 和禁止替换 owner 只是子项，不能替代登录与双角色。已准备 `local-auth-spec.md` 和 `docs/prototypes/p03-p05-local-auth/index.html`，真实浏览器验证 operator/maintainer、双向 403、401 和退出；待用户批准后实施。生产 SSO/HTTPS/管理面 NOT_RUN。 |
+| R01 维护、备份与恢复 | PASS（R2 修复后，待独立重验）；企业 Linux NOT_RUN | 现行 SIGKILL 恢复见上；实际旧提交 `6ec330d` 生成数据后经当前版本恢复：`.local/recovery-checks/run-1795244921305-ddb0b75c-0a00-445a-8ba6-89dca370db9b/result.json`，读回 SQLite、原 Session、Schedule、游标和 claimed 回执。 |
+| R02 owner 与权限 | PASS（本机登录/角色，待独立重验）；生产 SSO/HTTPS/管理面 NOT_RUN | 用户确认修正版 Demo 后实施：Host 仅存 token/session SHA256，HttpOnly/SameSite=Strict 会话，operator 建单/维护 403，maintainer 只读维护/业务 403，logout 撤销、重启读回、限流和明文不落库由 `test/server-auth.test.ts` 覆盖；真实浏览器 `.local/auth-ui-checks/run-8TpADq` PASS。 |
 | R03 凭据与组件 | PASS（合成凭据和精确官方包） | CredentialLocal 读取/轮换/撤回、错误脱敏、模型/HTTP/SQLite 扫描通过；SDK 锁、实际模块与 peer 身份通过。真实企业凭据设施 NOT_RUN。 |
 | R04 计算关闭 | PASS（主 Agent＋官方 Engine worker）；真实隔离 NOT_RUN | 原生 `run_compute` 返回 `compute_unavailable/dispatched:false`，Host marker 不存在；主/worker 均无 Host 回退。当前 profile 未提供独立 subagent 工具，不能宣称已验证原生子 Agent 树；容器/VM、文件/进程/网络/配额隔离继续 NOT_RUN。 |
 | R05 四类出口 | PASS（本机配置与合成模型路径）；真实端点 NOT_RUN | 模型精确 route 允许/拒绝、历史资格、撤回零 adapter 调用；外部研究/连接器、外发提醒/导出、遥测/外部备份无 sender 且保持 disabled，额外会话上传未配置。真实外部启用路径不在本机合成范围。 |
-| R06 常驻、异常与长流 | PASS（R2 修复后，待独立重验）；生产常驻 NOT_RUN | 关页、SIGKILL、重开、UNKNOWN 对账通过。`.local/longstream-checks/run-1795238386169/runner-result.json` 直接观测 `FileHandle.writeFile` 的真实累计字节：批次增量 `(1202,113540)`、`(2404,250328)`、`(4810,612112)`、`(9624,1670048)`，R² `0.9871647`；30 次前缀不变检查、无失败写；32 个物化 Session、1443 条原生事件及 16 个 marker/hash 各恰好一份原生报告完整读回。 |
+| R06 常驻、异常与长流 | PASS（R3 写放大修复后，待独立重验）；生产常驻 NOT_RUN | 关页、SIGKILL、重开、UNKNOWN 对账通过。已确认停止的旧 Schedule 通过官方公开 delete 退役并先保存业务回执，任务表不再随事件累积。`.local/longstream-checks/run-1795245937905/runner-result.json`：storage 每事件固定 8913 bytes，总写入 R² `0.9999930`、storage R² `0.99999996`；30 次前缀不变检查、无失败写；32 个物化 Session、1443 条原生事件及 16 个 marker/hash 各恰好一份原生报告完整读回。 |
 
 ## 独立复核 R2 与修复状态
 
 - 固定候选 `11e6fb560d909d6f41480a06e9eb7840c16fdd51` 的两名非作者复核均为 FAIL：`.local/independent/p03-p05-spec-r2/REPORT.md`、`.local/independent/p03-p05-standards-r2/REPORT.md`。第一次 Agent 启动因 429 未执行，恢复后 R2 实际完成；不以作者自检代替独立结论。
 - 已修复并留永久反例：撤权派生正文投影、旧快照后提交回写、路径别名共享 ID、pending assessment 摘要、stale CAS 原生副作用、缺失 interrupt 静默 following。真实浏览器和 `runtime/source-adversarial.test.mjs`、`runtime/lifecycle-adversarial.test.mjs`、`runtime/revocation-projection.test.mjs` 覆盖。
 - 已重做证据：真实 FileHandle 写入字节、Session 前缀/append flag、16 个 marker/hash 逐项读回；实际旧提交 `6ec330d` 数据恢复。R02 按 UI 门禁另交差异 spec＋Demo，待用户决定后重验。
+
+## 独立复核 R3 preflight 与后续修复
+
+- Spec preflight：`.local/independent/p03-p05-spec-r3-preflight/REPORT.md` 判 F01/F04 RESOLVED、F03 NOT_RESOLVED；真实 meter 揭示 Schedule JSON 任务表随事件累积并全量重写，storage 呈二次增长。
+- Standards preflight：`.local/independent/p03-p05-standards-r3-preflight/REPORT.md` 确认 R2 六项原始反例关闭，但新增 schedule/pause 并发重复 open 与 interrupt UNKNOWN 后重复派发两项 FAIL。
+- 后续修复：生命周期 schedule/pause/sync 统一串行、open singleflight、lifecycle-only 打开不投递研究上下文、暂停/UNKNOWN 不新建普通研究资源；官方 Schedule 确认停止后 delete 并保存 `schedule_retired` 安全回执。永久反例见 `runtime/lifecycle-race.test.mjs`；长流新增 storage 分量线性与每事件字节不放大断言。
+- R02：用户确认修正版 Demo 后实施本机登录/角色；见 `local-auth-spec.md`、`test/server-auth.test.ts`、`.local/auth-ui-checks/run-8TpADq`。
+- 旧版兼容补充：旧运行记录没有 heartbeat/context 标记，首次恢复曾重复创建心跳；现从原生 Schedule 与已保存 context 消息推断旧事实，实际 `6ec330d` 恢复重跑 PASS，未重复派发。
+- 调度退役时序：存活句柄上提前 delete 曾导致 Host-controls 停止/续派失败；现存活期间只 pause，dispose 确认后再 delete 并保存回执。过程中临时诊断自身引入的 `ReferenceError` 已移除，Host-controls 与长流重跑 PASS。
+- artifact-followup 探针曾要求无历史缓存权限时重开仍回放 v1 正文；按遮蔽契约改为断言安全旧版索引，官方链重跑 PASS，未放宽产品权限。
 
 ## 本轮 RED、修复与 fixture 失败留痕
 

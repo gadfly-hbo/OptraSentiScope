@@ -18,12 +18,13 @@
       <nav class="primary-nav" aria-label="主要导航">
         <button class="nav-button" data-action="overview" id="overview-nav"><span aria-hidden="true">▦</span> 委托总览</button>
         <button class="nav-button" data-action="reminders" id="reminders-nav"><span aria-hidden="true">◇</span> 待决提醒 <span id="reminder-count" class="nav-count">0</span></button>
+        <button class="nav-button" data-action="maintenance" id="maintenance-nav" hidden><span aria-hidden="true">▤</span> 本机维护</button>
       </nav>
       <div class="side-section"><p class="eyebrow">当前委托</p><div id="mandate-nav"><p class="meta">正在载入…</p></div></div>
       <div class="side-footer"><span class="status-dot muted-dot"></span><strong>Call 待接入</strong><p>Call 接缝尚未接通，资料覆盖和缺口在委托内查看。</p></div>
     </aside>
     <div class="workspace">
-      <header class="topbar"><span class="workspace-name">经营者工作台</span><div class="inline-actions"><span id="connection-status" class="meta">连接中</span><button id="theme-toggle" class="icon-button" data-action="theme" aria-label="切换为亮色主题" title="切换主题">☀</button></div></header>
+      <header class="topbar"><span class="workspace-name">经营者工作台</span><div class="inline-actions"><span id="connection-status" class="meta">连接中</span><button id="logout" class="ghost" hidden>退出登录</button><button id="theme-toggle" class="icon-button" data-action="theme" aria-label="切换为亮色主题" title="切换主题">☀</button></div></header>
       <main id="main" tabindex="-1"><div id="screen"><div class="empty-state"><h1>正在载入委托</h1><p>正在读取 Host 保存的当前状态。</p></div></div></main>
       <footer class="page-footer">
         <p>委托和已有记录由 Host 保存。关闭工作台不改变委托状态，研究进展以可核实的运行事实为准。</p>

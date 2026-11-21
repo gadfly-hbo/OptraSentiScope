@@ -14,6 +14,7 @@ import type {ModelEgressGrant} from '../src/egress.ts';
 import type {BriefPreferences} from '../src/notifications.ts';
 import {HostControls} from './controls.ts';
 import type {HostDefaults,LocalModelRoute} from './controls.ts';
+import type {LocalAuthConfig} from '../src/auth.ts';
 import {createNativeResearchPort} from './native.ts';
 export const name='sentiscope-product-host';
 export const inject=['agents','agentLoop','sessions','sessionPersistence','schedule','llm','tools','credentials'];
@@ -21,11 +22,11 @@ export interface Config {
  dataDirectory:string;owner:ResearchOptions['owner'];port:number;model?:ResearchOptions['model'];intervalSeconds?:number;grants?:ResearchOptions['grants'];
  budgets?:Readonly<Record<string,BudgetConfig>>;modelEgress?:Readonly<Record<string,ModelEgressGrant>>;
  credentialGrants?:readonly Omit<CredentialGrant,'owner'>[];resourceDefaults?:HostDefaults;
- notificationDefaults?:BriefPreferences;
+ notificationDefaults?:BriefPreferences;auth?:LocalAuthConfig;
 }
 /** Local synthetic routes are trusted in-process fixtures; no JSON flag grants external model transport. */
 export async function startProductHost(ctx:Context,config:Config,engineering:{localModelRoutes?:readonly LocalModelRoute[]}={}) {
- if(!config||Object.keys(config).some(k=>!['dataDirectory','owner','port','model','intervalSeconds','grants','budgets','modelEgress','credentialGrants','resourceDefaults','notificationDefaults'].includes(k)))throw new Error('Invalid Host configuration');
+ if(!config||Object.keys(config).some(k=>!['dataDirectory','owner','port','model','intervalSeconds','grants','budgets','modelEgress','credentialGrants','resourceDefaults','notificationDefaults','auth'].includes(k)))throw new Error('Invalid Host configuration');
  if(!config.owner||typeof config.owner.enterpriseId!=='string'||!config.owner.enterpriseId.trim()||typeof config.owner.principalId!=='string'||!config.owner.principalId.trim()||Object.keys(config.owner).some(k=>!['enterpriseId','principalId'].includes(k)))throw new Error('Host owner is required');
  if(config.model&&(Object.keys(config.model).some(k=>!['provider','model','maxTokens'].includes(k))||typeof config.model.provider!=='string'||typeof config.model.model!=='string'))throw new Error('Use non-secret model references only');
  if(!Number.isSafeInteger(config.port)||config.port<0||config.port>65535)throw new Error('Invalid local port');
@@ -40,7 +41,7 @@ export async function startProductHost(ctx:Context,config:Config,engineering:{lo
  coordinator=new ResearchCoordinator({store,owner:config.owner,native,Engine,controls,model:config.model,intervalSeconds:config.intervalSeconds,grants:config.grants,notificationDefaults:config.notificationDefaults,protectedDirectories:[resolve(project,'.local'),resolve(project,'runtime'),resolve(project,'.git'),directory]});
  let host:Awaited<ReturnType<typeof startLocalHost>>|undefined;
  try{
-  host=await startLocalHost({store,owner:config.owner,port:config.port,controlPort:coordinator.controlPort,researchPort:coordinator});
+  host=await startLocalHost({store,owner:config.owner,port:config.port,controlPort:coordinator.controlPort,researchPort:coordinator,auth:config.auth,allowUnauthenticated:!config.auth&&Boolean(engineering.localModelRoutes?.length)});
   if(config.credentialGrants)controls.configureCredentials(config.credentialGrants.map(g=>({...g,owner:config.owner})));
   for(const [id,budget]of Object.entries(config.budgets??{}))controls.configureBudget(id,budget);
   for(const [id,egress]of Object.entries(config.modelEgress??{}))controls.configureModelEgress(id,egress);

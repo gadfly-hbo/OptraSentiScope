@@ -13,8 +13,11 @@ const owner = Object.freeze({
   enterpriseId: process.env.SENTISCOPE_ENTERPRISE_ID ?? 'local-enterprise',
   principalId: process.env.SENTISCOPE_PRINCIPAL_ID ?? 'local-operator',
 });
+const operatorTokenHash = process.env.SENTISCOPE_OPERATOR_TOKEN_HASH;
+const maintainerTokenHash = process.env.SENTISCOPE_MAINTAINER_TOKEN_HASH;
+if (!operatorTokenHash || !maintainerTokenHash) throw new Error('SENTISCOPE_OPERATOR_TOKEN_HASH and SENTISCOPE_MAINTAINER_TOKEN_HASH are required for the local workbench.');
 const store = new SentiStore({ filename: join(dataDirectory, 'business.sqlite') });
-const host = await startLocalHost({ store, owner, port });
+const host = await startLocalHost({ store, owner, port, auth: { operatorTokenHash, maintainerTokenHash } });
 process.stdout.write(`OptraSentiScope 经营者工作台：${host.url}\n本地工程入口；委托已持久化，官方研究运行尚未接通。\n`);
 let closing = false;
 async function shutdown() {

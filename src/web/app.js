@@ -5,7 +5,7 @@ const $ = (selector) => document.querySelector(selector);
 const escapeText = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const tabs = [['progress', '进展'], ['plan', '方案与依据'], ['decisions', '待决事项'], ['results', '结果与学习'], ['sources', '资料'], ['conversation', '补充对话']];
 const lifecycleLabels = { active: '进行中', pausing: '正在暂停', paused: '已暂停', resuming: '正在核对恢复资格', ending: '正在结束', ended: '已结束' };
-const state = { delegations: [], runtime: null, detail: null, selectedId: null, tab: 'progress', filter: 'all', reminders: false, loaded: false, connected: false, busy: false, error: '', updatedAt: null, unresolved: null };
+const state = { delegations: [], runtime: null, detail: null, selectedId: null, tab: 'progress', filter: 'all', reminders: false, loaded: false, connected: false, busy: false, error: '', updatedAt: null, unresolved: null, session: null, maintenance: null };
 const drafts = new Map();
 const decisionDrafts = new Map();
 let opener = null;
@@ -17,7 +17,7 @@ function button(action, label, attributes = '') { return `<button data-action="$
 function badge(text, tone = '') { return `<span class="badge ${tone}">${escapeText(text)}</span>`; }
 function title(item) { const line = item.goal.split('\n')[0]; return line.length > 26 ? `${line.slice(0, 26)}…` : line; }
 function time(value) { const date = new Date(value); return value && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(date) : '时间未记录'; }
-function canWrite() { return state.connected && !state.busy && !state.unresolved; }
+function canWrite() { return state.connected && state.session?.role === 'operator' && !state.busy && !state.unresolved; }
 function isEditable(item) { return ['active', 'paused'].includes(item.lifecycle); }
 function records(name) { return Array.isArray(state.detail?.[name]) ? state.detail[name] : []; }
 function pendingDecisions() { return state.delegations.flatMap((delegation) => (Array.isArray(delegation.pendingDecisions) ? delegation.pendingDecisions : []).map((entry) => ({ ...entry, delegationId: delegation.id }))); }
@@ -104,7 +104,7 @@ function researchLabel(item) {
   if (item.lifecycle === 'resuming') return '待恢复资格核对';
   if (['paused', 'ended'].includes(item.lifecycle)) return '研究已停止';
   const status = item.research?.status;
-  return ({ not_started: '等待运行资格', unconfigured: '等待研究运行资格', following: '持续跟进已启用', running: '研究执行中', researching: '研究执行中', waiting: '等待信息或研究资源', blocked: '研究受阻', failed: '研究失败', unknown: '研究状态未确认 · UNKNOWN', ready: '本轮研究报告就绪', observing: '有理由观察', idle: '持续跟进中' })[status] || (status ? `研究状态：${status}` : '运行状态待核实');
+  return ({ not_started: '等待运行资格', unconfigured: '等待研究运行资格', paused: '研究已暂停', following: '持续跟进已启用', running: '研究执行中', researching: '研究执行中', waiting: '等待信息或研究资源', blocked: '研究受阻', failed: '研究失败', unknown: '研究状态未确认 · UNKNOWN', ready: '本轮研究报告就绪', observing: '有理由观察', idle: '持续跟进中' })[status] || (status ? `研究状态：${status}` : '运行状态待核实');
 }
 function announce(text) { $('#announcement').textContent = text; }
 function current() { return state.detail?.delegation?.id === state.selectedId ? state.detail.delegation : null; }
@@ -153,17 +153,22 @@ function render() {
   const focusedArtifact = focused?.dataset.artifactId && focused?.dataset.artifactVersion ? { artifactId: focused.dataset.artifactId, version: Number(focused.dataset.artifactVersion) } : null;
   const focusedCard = focused?.closest('[data-artifact-id][data-artifact-version]');
   const focusedCardBefore = focusedCard ? { artifactId: focusedCard.dataset.artifactId, version: focusedCard.dataset.artifactVersion, historical: focusedCard.closest('details[data-disclosure]')?.dataset.disclosure === 'artifact-history' } : null;
-  const item = current();
-  $('#overview-nav').classList.toggle('active', !state.selectedId && !state.reminders);
-  $('#reminders-nav').classList.toggle('active', !state.selectedId && state.reminders);
-  $('#reminder-count').textContent = String(pendingDecisions().length);
-  $('#mandate-nav').innerHTML = state.delegations.length ? state.delegations.map((delegation) => button('open', escapeText(title(delegation)), `class="mandate-nav ${delegation.id === state.selectedId ? 'active' : ''}" data-id="${escapeText(delegation.id)}"`)).join('') : '<p class="meta">暂无委托</p>';
-  $('#connection-status').textContent = state.connected ? `已连接 · ${time(state.updatedAt)}` : state.loaded ? '连接未确认' : '连接中';
+  const item = current(), operator = state.session?.role === 'operator', maintainer = state.session?.role === 'maintainer';
+  $('#overview-nav').disabled = !operator; $('#reminders-nav').disabled = !operator; $('#maintenance-nav').hidden = !maintainer;
+  $('#overview-nav').classList.toggle('active', operator && !state.selectedId && !state.reminders);
+  $('#reminders-nav').classList.toggle('active', operator && !state.selectedId && state.reminders);
+  $('#maintenance-nav').classList.toggle('active', maintainer);
+  $('#logout').hidden = !state.session;
+  $('#reminder-count').textContent = String(operator ? pendingDecisions().length : 0);
+  $('#mandate-nav').innerHTML = operator && state.delegations.length ? state.delegations.map((delegation) => button('open', escapeText(title(delegation)), `class="mandate-nav ${delegation.id === state.selectedId ? 'active' : ''}" data-id="${escapeText(delegation.id)}"`)).join('') : `<p class="meta">${operator ? '暂无委托' : '登录后显示'}</p>`;
+  $('#connection-status').textContent = !state.loaded ? '连接中' : !state.session ? '未登录' : state.connected ? maintainer ? '已连接 · 维护者' : `已连接 · ${time(state.updatedAt)}` : '连接未确认';
   const runtimeMessage = state.runtime?.message || '研究运行环境尚未接通。';
-  $('#service-status').textContent = state.connected ? runtimeMessage : state.loaded ? 'Host 暂时无法确认。下方保留最后可核实状态，尚未确认新的运行事实。' : '正在连接工作台…';
-  $('#service-status').className = `service-status ${state.connected ? ['unconfigured', 'unavailable', 'failed'].includes(state.runtime?.status) ? 'warning' : '' : state.loaded ? 'danger' : ''}`;
+  $('#service-status').textContent = !state.session && state.loaded ? '本机工作台尚未登录。' : state.connected ? runtimeMessage : state.loaded ? 'Host 暂时无法确认。下方保留最后可核实状态，尚未确认新的运行事实。' : '正在连接工作台…';
+  $('#service-status').className = `service-status ${state.connected ? ['unconfigured', 'unavailable', 'failed'].includes(state.runtime?.status) ? 'warning' : '' : state.loaded && state.session ? 'danger' : ''}`;
   let content;
   if (!state.loaded) content = '<div class="empty-state"><h1>正在载入委托</h1><p>正在读取 Host 保存的当前状态。</p></div>';
+  else if (!state.session) content = loginView();
+  else if (maintainer) content = maintenanceView();
   else if (state.selectedId && !item) content = `<div class="empty-state"><h1>委托暂时无法查看</h1><p>请刷新核对当前访问资格和保存状态。</p>${button('refresh', '重新读取', 'class="primary"')}${button('overview', '返回总览')}</div>`;
   else content = item ? detail(item) : overview();
   $('#screen').innerHTML = `${errorNotice()}${content}`;
@@ -214,6 +219,14 @@ function render() {
 function errorNotice() {
   if (!state.error && !state.unresolved) return '';
   return `<div class="notice danger page-error" role="alert"><strong>${state.unresolved ? '这次保存结果尚未确认' : '需要核对当前状态'}</strong><p>${escapeText(state.error)}</p><div class="section-actions actions">${state.unresolved ? button('retry-save', '核对并重试同一次保存', `${state.busy ? 'disabled' : ''}`) : button('refresh', '重新读取当前状态', `${state.busy ? 'disabled' : ''}`)}</div>${state.unresolved ? '<p class="meta">保留原请求身份，不新增第二次操作；未确认前暂停其他写入。</p>' : ''}</div>`;
+}
+
+function loginView() {
+  return `<div class="page-heading"><div><div class="heading-label">本机访问</div><h1>登录本机工作台</h1><p>使用管理员交付的本机令牌。企业、经营者和角色由 Host 绑定，页面不能选择或替换。</p></div></div><div class="panel" style="max-width:520px"><div class="notice">登录后浏览器只使用 HttpOnly 会话 cookie；令牌不会保存在页面脚本或本地存储。</div>${state.error ? `<div class="notice danger" role="alert">${escapeText(state.error)}</div>` : ''}<form id="login-form"><div class="field"><label for="login-token">本机令牌</label><input id="login-token" name="token" type="password" autocomplete="current-password" required autofocus><span class="helper">不需要填写企业 ID、机器身份或角色。</span></div><div class="actions"><button class="primary" type="submit">登录</button></div></form></div>`;
+}
+function maintenanceView() {
+  const value = state.maintenance;
+  return `<div class="page-heading"><div><div class="heading-label">本机维护 / 只读</div><h1>本机维护状态</h1><p>维护者只能查看运行与组件事实，不能读取或修改经营委托。</p></div></div><div class="panel">${value ? `<dl class="definition-list"><div><dt>运行环境</dt><dd>${escapeText(value.runtime?.status || 'unknown')} · ${escapeText(value.runtime?.message || '')}</dd></div><div><dt>计算</dt><dd>${escapeText(value.compute)}</dd></div><div><dt>Call</dt><dd>${escapeText(value.call)}</dd></div><div><dt>外部出口</dt><dd>${escapeText(Object.entries(value.egress || {}).map(([key, status]) => `${key}: ${status}`).join(' · '))}</dd></div></dl>` : '<p class="secondary">正在读取本机维护状态。</p>'}</div>`;
 }
 
 function overview() {
@@ -452,8 +465,22 @@ function navigate(id = null, tab = 'progress', reminders = false, decisionRef = 
   window.scrollTo({ top: 0 });
 }
 
+async function loadSession() {
+  try { state.session = await request('/api/session'); state.error = ''; }
+  catch (error) { state.session = null; if (error.status !== 401) state.error = error.message; }
+  finally { state.loaded = true; render(); }
+}
+
 async function refresh() {
   if (refreshing) return;
+  if (!state.session) { state.loaded = true; render(); return; }
+  if (state.session.role === 'maintainer') {
+    refreshing = true;
+    try { state.maintenance = await request('/api/maintenance'); state.connected = true; state.updatedAt = new Date().toISOString(); }
+    catch (error) { state.connected = false; if (error.status === 401) { state.session = null; state.error = ''; } else state.error = error.message; }
+    finally { refreshing = false; state.loaded = true; render(); }
+    return;
+  }
   refreshing = true;
   let refreshedId = null;
   const requestedTarget = decisionNavigation;
@@ -469,7 +496,8 @@ async function refresh() {
     state.connected = true; state.updatedAt = new Date().toISOString();
   } catch (error) {
     state.connected = false;
-    if (!state.loaded || !['CONNECTION_UNCONFIRMED', 'RESPONSE_UNCONFIRMED', 'REQUEST_UNCONFIRMED'].includes(error.code)) state.error = error.message;
+    if (error.status === 401) { state.session = null; state.error = ''; }
+    else if (!state.loaded || !['CONNECTION_UNCONFIRMED', 'RESPONSE_UNCONFIRMED', 'REQUEST_UNCONFIRMED'].includes(error.code)) state.error = error.message;
   } finally {
     refreshing = false; state.loaded = true; render();
     const target = decisionNavigation;
@@ -556,6 +584,13 @@ function respondToDecision(entry, action, additions = {}) {
   void mutate(`/api/delegations/${encodeURIComponent(item.id)}/commands`, payload, action === 'reply' ? 'decision-reply' : action === 'acknowledge' ? 'decision-acknowledge' : 'decision');
 }
 
+$('#logout').addEventListener('click', async () => {
+  try { await request('/api/logout', { method: 'POST' }); }
+  catch (error) { state.error = error.message; }
+  state.session = null; state.delegations = []; state.detail = null; state.maintenance = null; state.selectedId = null; state.reminders = false; state.connected = false; state.error = '';
+  history.replaceState(null, '', '#overview'); render(); $('#login-token')?.focus();
+});
+
 $('#modal').addEventListener('close', () => {
   if (opener?.isConnected) opener.focus({ preventScroll: true });
   else { const action = opener?.dataset.action; const equivalent = action ? Array.from(document.querySelectorAll('[data-action]')).find((element) => !element.disabled && Object.entries(opener.dataset).every(([key, value]) => element.dataset[key] === value)) : null; (equivalent || $('#main')).focus({ preventScroll: true }); }
@@ -570,6 +605,7 @@ document.addEventListener('click', (event) => {
   if (action === 'theme') { applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); return; }
   if (action === 'close-dialog') { closeDialog(); return; }
   if (action === 'refresh') { state.error = ''; void refresh(); return; }
+  if (action === 'maintenance') { state.selectedId = null; state.reminders = false; history.replaceState(null, '', '#maintenance'); render(); void refresh(); return; }
   if (action === 'retry-save' && state.unresolved) { const pending = state.unresolved; void mutate(pending.path, pending.payload, pending.purpose, true); return; }
   if (action === 'overview' || action === 'reminders') { navigate(null, 'progress', action === 'reminders'); return; }
   if (action === 'open' || action === 'reminder-open') { navigate(control.dataset.id, action === 'reminder-open' ? 'decisions' : 'progress', false, action === 'reminder-open' ? { id: control.dataset.decision, revision: Number(control.dataset.decisionRevision) } : null); return; }
@@ -592,10 +628,17 @@ document.addEventListener('click', (event) => {
   }
   if (['pause', 'resume', 'end'].includes(action)) command(action);
 });
-document.addEventListener('submit', (event) => {
-  if (!['create-form', 'edit-form', 'conversation-form', 'decision-reply-form', 'lifecycle-form', 'preferences-form'].includes(event.target.id)) return;
-  event.preventDefault(); if (!canWrite()) return;
+document.addEventListener('submit', async (event) => {
+  if (!['login-form', 'create-form', 'edit-form', 'conversation-form', 'decision-reply-form', 'lifecycle-form', 'preferences-form'].includes(event.target.id)) return;
+  event.preventDefault();
   const form = event.target; const data = new FormData(form);
+  if (form.id === 'login-form') {
+    const token = String(data.get('token') || '');
+    try { state.session = await request('/api/login', { method: 'POST', body: JSON.stringify({ token }) }); state.error = ''; form.reset(); await refresh(); }
+    catch (error) { state.error = error.message; render(); $('#login-token')?.focus(); }
+    return;
+  }
+  if (!canWrite()) return;
   if (form.id === 'decision-reply-form') {
     const text = String(data.get('text') || '').trim();
     if (!text) { $('#decision-error').textContent = '请说明你的选择或希望调整的条件。'; $('#decision-note').setAttribute('aria-invalid', 'true'); $('#decision-note').focus(); return; }
@@ -665,4 +708,4 @@ async function pollProjection() {
 }
 window.addEventListener('pagehide', () => clearTimeout(refreshTimer));
 window.addEventListener('pageshow', () => { clearTimeout(refreshTimer); void pollProjection(); });
-readLocation(); void refresh();
+readLocation(); void loadSession().then(() => refresh());

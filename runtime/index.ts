@@ -72,6 +72,8 @@ export interface NativeResearchHandle {
   dispose(): Promise<void>;
   createSchedule(request: { readonly title: string; readonly prompt: string; readonly timing: ScheduleTiming }): Promise<ScheduleCatalogEntry>;
   disableSchedule(id: string): Promise<void>;
+  /** Confirm stop, then remove the official task row; the caller persists the returned safe receipt first. */
+  retireSchedule?(id: string): Promise<ScheduleCatalogEntry>;
   listSchedules(): Promise<readonly ScheduleCatalogEntry[]>;
   /** Re-drive only known active native tasks after current main Session restoration; never creates or runs a task. */
   refreshSchedules?(): Promise<void>;

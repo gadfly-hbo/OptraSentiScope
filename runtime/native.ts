@@ -198,6 +198,17 @@ export function createNativeResearchPort(ctx: Context, portOptions: NativePortOp
           const edited = await ctx.schedule.edit({ id: ScheduleId(scheduleId), action: 'update', patch: { active: false } }, sessionId);
           if (!('status' in edited) || edited.status !== 'paused' && edited.status !== 'ended') throw new Error('NATIVE_SCHEDULE_DISABLE_FAILED');
         },
+        async retireSchedule(scheduleId) {
+          if (!knownSchedules.has(scheduleId)) throw new Error('NATIVE_SCHEDULE_UNOWNED');
+          const row = await ctx.schedule.view({ id: ScheduleId(scheduleId) });
+          if (!('target' in row) || row.target.kind !== 'session' || row.target.sessionId !== id) throw new Error('NATIVE_SCHEDULE_UNOWNED');
+          const stopped = row.status === 'active' ? await ctx.schedule.edit({ id: ScheduleId(scheduleId), action: 'update', patch: { active: false } }, sessionId) : row;
+          if (!('status' in stopped) || stopped.status !== 'paused' && stopped.status !== 'ended') throw new Error('NATIVE_SCHEDULE_DISABLE_FAILED');
+          const deleted = await ctx.schedule.edit({ id: ScheduleId(scheduleId), action: 'delete' }, sessionId);
+          if (!('deleted' in deleted) || deleted.deleted !== true) throw new Error('NATIVE_SCHEDULE_RETIRE_FAILED');
+          knownSchedules.delete(scheduleId);
+          return stopped;
+        },
         async listSchedules() {
           const rows: ScheduleCatalogEntry[] = [];
           for (const scheduleId of knownSchedules) {

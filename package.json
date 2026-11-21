@@ -36,7 +36,8 @@
     "check:effect-ui": "node scripts/check-effect-ui.mjs",
     "check:general-ui": "node scripts/check-general-ui.mjs",
     "check:lifecycle-ui": "node scripts/check-lifecycle-ui.mjs",
-    "check:revocation-ui": "node scripts/check-revocation-ui.mjs"
+    "check:revocation-ui": "node scripts/check-revocation-ui.mjs",
+    "check:auth-ui": "node scripts/check-auth-ui.mjs"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

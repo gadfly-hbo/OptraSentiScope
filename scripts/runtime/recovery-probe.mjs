@@ -173,7 +173,12 @@ export async function apply(ctx, config) {
       assert.equal(adapter.calls.length, pausedRequests);
       assert.ok(runs(host.store, id).every(run => run.state === 'retired'));
       for (const run of restored) assert.equal(ctx.agents.get(run.sessionId), undefined, 'Official Agent registry no longer holds the paused owned Session');
-      for (const schedule of prior.schedules) assert.equal((await ctx.schedule.view({ id: schedule.id })).status, 'paused');
+      const stoppedDetail = await request(`/api/delegations/${id}`);
+      for (const schedule of prior.schedules) {
+        const row = await ctx.schedule.view({ id: schedule.id });
+        assert.ok(row.status === 'paused' || row.code === 'schedule_not_found', 'Owned Schedule is paused or retired after confirmed stop');
+        if (row.code === 'schedule_not_found') assert.ok(stoppedDetail.technical.some(fact => fact.kind === 'schedule_retired' && fact.detail.scheduleId === schedule.id), 'Retired Schedule keeps a durable business receipt');
+      }
       detail = await request(`/api/delegations/${id}`);
       await request(`/api/delegations/${id}/commands`, { kind: 'end', expectedVersion: detail.delegation.version, idempotencyKey: 'recovery-end' });
       await wait(async () => (await request(`/api/delegations/${id}`)).delegation.lifecycle === 'ended', 'cold Host end settlement');

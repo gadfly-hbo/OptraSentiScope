@@ -1,6 +1,6 @@
 # 本地开发入口
 
-当前交付是首个真实持久委托切片，运行方案与完整首版规格不变。正式 Agent 研究、企业来源、Call、计算隔离及生产入口尚未接通；页面明确等待运行资格，不带原型研究或虚构成果。
+当前交付进入 P03–P05 合成工程阶段：正常工作台可建立持续委托，官方 Engine/Harness 与业务 SQLite 已接通，共享合成来源、生命周期摘要、本机登录/角色、备份恢复和长流写入已有隔离证据。真实企业来源、真实模型质量、Call、计算隔离及生产入口仍未接通；页面不把合成证据写成真实经营成果。
 
 ## 启动与检查
 
@@ -12,19 +12,19 @@ npm run check
 npm start
 ```
 
-已有agent-browser／浏览器时可运行`npm run check:ui`，它新建私有合成资料库验证周期刷新后的键盘焦点，不连接现有工作台或业务数据。已有获批官方SDK私有安装时可运行`npm run check:sdk`，详见[最小SDK工程检查](../scripts/sdk/README.md)。两项都不会安装工具／依赖；自有单元检查、真实浏览器和SDK工程检查分别报告。
+已有agent-browser／浏览器时可运行`npm run check:ui`、`check:general-ui`、`check:lifecycle-ui`、`check:revocation-ui`、`check:auth-ui`等浏览器检查，它们新建私有合成资料库，不连接现有工作台或业务数据。已有获批官方SDK私有安装时可运行`npm run check:sdk`、`check:sources`、`check:recovery`、`check:legacy-recovery`、`check:longstream`，详见[最小SDK工程检查](../scripts/sdk/README.md)与[P03–P05结果记录](../openspec/changes/p03-p05-sustained-sources/results.md)。这些命令不会安装工具／依赖；自有单元检查、真实浏览器和SDK工程检查分别报告。
 
 默认地址为 `http://127.0.0.1:8766`。入口固定绑定 loopback，不支持直接开放到局域网或公网。管理员可用 `SENTISCOPE_PORT` 和 `SENTISCOPE_DATA_DIR` 指定端口和私有数据目录。首次建库、目标版本、控制回执、补充记录都保存在该目录的 `business.sqlite`，默认 `.local/product/`；刷新或关闭浏览器不清除它们。
 
-本地工程 owner 由 Host 配置绑定，默认 `local-enterprise`／`local-operator`，可由管理员通过 `SENTISCOPE_ENTERPRISE_ID`／`SENTISCOPE_PRINCIPAL_ID` 明确设置。它们不是企业登录或SSO身份；浏览器不能自行提交或替换 owner。当前同源／Host／请求体约束只保护本机开发入口，不代替生产认证、HTTPS、OS用户隔离或完整资料出口控制。
+本机工作台现在要求 operator／maintainer 两个角色令牌哈希。`npm start` 读取 `SENTISCOPE_OPERATOR_TOKEN_HASH` 与 `SENTISCOPE_MAINTAINER_TOKEN_HASH`；`npm run start:runtime` 在私有 Host JSON 的 `auth` 中读取同名字段。Host 只保存 SHA256，浏览器登录后使用 HttpOnly／SameSite=Strict 会话 cookie。owner 仍由 Host 配置绑定，默认 `local-enterprise`／`local-operator`，可由 `SENTISCOPE_ENTERPRISE_ID`／`SENTISCOPE_PRINCIPAL_ID` 或 Host JSON 设置；浏览器不能提交或替换 owner／role。这不是生产 SSO、HTTPS 或 OS 用户隔离。
 
-当前 `npm start` 没有 Agent／Session／计算启动实现。暂停、结束对这个事实核对后保存匹配回执；恢复因研究运行能力未接通而返回已暂停并说明原因，不假称开始研究。控制投递意图与业务命令同事务，提交后才调用受限端口；已派发但回执未知的请求重开后保持UNKNOWN，不自动重放。一个业务库只允许一个存活 Host 执行对账。
+`npm start` 是离线持久工作台，不启动官方研究 Runtime；`npm run start:runtime` 才启动官方 Harness/Engine。暂停、结束先保存业务意图并核对原生停止回执；恢复/结束摘要只汇总已保存事实。已派发但回执未知的请求重开后保持 UNKNOWN，不自动重放。一个业务库只允许一个存活 Host 执行对账。
 
 ## 工程状态
 
-- 已实现：持久委托、原始目标／修订、owner与幂等、生命周期意图／匹配回执、补充记录、真实HTTP／获批工作台、明确空态和未接通状态。
-- SDK安装及最小官方消费核验与产品运行分开，见[SDK分项记录](SDK_E1_实际消费核验_v0.1.md)。官方SDK仍保持原实现；该独立核验不将研究接通到本地工作台。
-- 未完成：官方Engine与业务SQLite、真实会话／资料工具、原生调度的委托授权、持续研究、方案／结果／学习、实际计算与出口隔离、生产认证／部署。Call接缝继续后排；完整首版相关能力不因本切片存在而算通过。
+- 已实现：持久委托、原始目标／修订、owner与幂等、本机登录/角色、生命周期意图／匹配回执、恢复/结束事实摘要、补充记录、真实HTTP／获批工作台、共享合成来源、官方 Engine/Harness 合成研究链、备份恢复与长流写入计量。
+- SDK安装及最小官方消费核验与产品运行分开，见[SDK分项记录](SDK_E1_实际消费核验_v0.1.md)。官方SDK仍保持原实现；合成 Provider 证据不等于真实模型研究质量。
+- 未完成：真实企业来源与更新/撤权时限、真实模型质量、Call接缝、实际计算与出口隔离、生产认证／部署、经营 POC 和完整首版验收。
 
 CI逐字节复用核对到的OptraCall单`check` job，运行根项目锁定依赖的安装、`npm run check`及`npm audit --audit-level=high`。本地检查不是GitHub CI PASS；本轮未推送或合并，也未部署。SDK私有核验的原包FAIL与未运行项单列，不能由自有测试全绿抹去。
 

@@ -21,11 +21,11 @@ test('stale lifecycle scheduling has no native open, Schedule or delivery before
  }finally{await f.close();}
 });
 
-test('a native port without interrupt leaves pause UNKNOWN instead of following',async()=>{
+test('a native port without interrupt does not create research just to pause it',async()=>{
  const f=fixture({interrupt:false});try{
   const item=f.store.create(owner,{goal:'Missing interrupt capability',idempotencyKey:'create'});f.coordinator.pauseResearch(item.id,{expectedVersion:0,mode:'all',reason:'Pause without interrupt',idempotencyKey:'pause'});
-  await assert.rejects(f.coordinator.sync(item.id),{code:'research_interrupt_unknown'});
-  const detail=f.coordinator.detail(item.id);assert.equal(detail.researchStatus.status,'unknown');assert.ok(detail.technical.some(entry=>entry.kind==='research_interrupt_unknown'&&entry.detail.reason==='interrupt_unavailable'));assert.equal(detail.technical.some(entry=>entry.kind==='research_interrupted'),false);
+  await f.coordinator.sync(item.id);
+  const detail=f.coordinator.detail(item.id);assert.equal(detail.researchStatus.status,'paused');assert.equal(f.opened.length,0);assert.equal(detail.technical.some(entry=>entry.kind==='research_interrupted'||entry.kind==='research_interrupt_unknown'),false);
  }finally{await f.close();}
 });
 

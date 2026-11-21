@@ -1,6 +1,6 @@
-# 本机经营者／维护者登录差异 spec（待用户确认）
+# 本机经营者／维护者登录差异 spec（已确认并实施）
 
-2026-11-21 · 独立复核 F02 触发的受影响范围变更。本文和 [可点击 Demo](../../../docs/prototypes/p03-p05-local-auth/index.html) 只用于前置确认；未确认前不修改正式登录产品代码。
+2026-11-21 · 独立复核 F02 触发的受影响范围变更。用户已确认直接复用正式 `styles.css` 与工作台 shell 的[修正版可点击 Demo](../../../docs/prototypes/p03-p05-local-auth/index.html)，随后实施正式登录产品代码。
 
 ## 当前差异与验收
 
@@ -33,12 +33,12 @@
 
 ## 验证清单
 
-- [ ] 无 cookie/无效 token 不能读取或创建委托，401 安全错误且不泄露 owner 业务数据。
-- [ ] operator 登录、建单、刷新和重开均绑定配置 owner；operator 调维护 API 为 403。
-- [ ] maintainer 只能读取维护状态；其业务 API 为 403，不能通过请求体替换 owner/role。
-- [ ] token 不明文出现在 SQLite、原生会话、HTTP、控制台、日志或备份 manifest；cookie 不可被 JS 读取。
-- [ ] logout 后原会话 401；过期/撤销/篡改 cookie 均失败；登录有限流。
-- [ ] 真实浏览器验证登录/退出、键盘、错误状态、390px、operator/maintainer 分权；既有 U01–U12 回归。
+- [x] 无 cookie/无效 token 不能读取或创建委托，401 安全错误且不泄露 owner 业务数据。
+- [x] operator 登录、建单、刷新和重开均绑定配置 owner；operator 调维护 API 为 403。
+- [x] maintainer 只能读取维护状态；其业务 API 为 403，不能通过请求体替换 owner/role。
+- [x] token 不明文出现在 SQLite、原生会话、HTTP、控制台、日志或备份 manifest；cookie 不可被 JS 读取。
+- [x] logout 后原会话 401；过期/撤销/篡改 cookie 均失败；登录有限流。
+- [x] 真实浏览器验证登录/退出、键盘、错误状态、390px、operator/maintainer 分权；既有 U01–U12 回归。
 - [ ] 旧服务数据不变；试用切换时在私有 Host 配置角色 hash，向用户单独交付本机 token 位置。
 
 ## Demo 边界
