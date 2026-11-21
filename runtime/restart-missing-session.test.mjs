@@ -53,6 +53,27 @@ test('a run row committed before the first session flush recovers on restart ins
  }finally{await coordinator.close().catch(()=>{});store.close();rmSync(directory,{recursive:true,force:true});}
 });
 
+test('a missing session with a recorded heartbeat Schedule stays fail-closed isolated while startup continues',async()=>{
+ const {directory,sourceDirectory,store,owner}=fixture();
+ const sessions=new Set(),first=native(sessions),coordinator=new ResearchCoordinator({store,owner,native:first,Engine,model:{provider:'synthetic-review',model:'none'},intervalSeconds:60});
+ try{
+  const id=await createDelegation(store,owner,coordinator,sourceDirectory,'orphan');
+  const prior=runs(store,id).filter(r=>r.binding.role==='main').at(-1);assert.ok(prior.schedules.length>0,'heartbeat Schedule must be recorded');
+  await coordinator.close();
+  // R1 real lockout field: run row unknown with a heartbeat Schedule but the session JSONL never flushed.
+  sessions.clear();
+  store.connection.prepare('UPDATE research_runs SET value=? WHERE key=? AND generation=?').run(JSON.stringify({...prior,state:'unknown'}),prior.key,prior.binding.generation);
+  const second=native(new Set()),restarted=new ResearchCoordinator({store,owner,native:second,Engine,model:{provider:'synthetic-review',model:'none'},intervalSeconds:60});
+  try{
+   await restarted.start();
+   const after=runs(store,id).filter(r=>r.binding.role==='main').at(-1);
+   assert.equal(after.state,'unknown','orphan Schedule must not be silently retired or auto-recreated');
+   assert.ok(facts(store,id).includes('reconcile_failed'));
+   assert.ok(!second.opened.some(run=>run.binding.delegationId===id&&!run.options.resume),'no blind fresh session for an orphan-Schedule delegation');
+  }finally{await restarted.close();}
+ }finally{await coordinator.close().catch(()=>{});store.close();rmSync(directory,{recursive:true,force:true});}
+});
+
 test('startup reconciliation isolates a failing delegation and still starts the others',async()=>{
  const {directory,sourceDirectory,store,owner}=fixture();
  const sessions=new Set(),first=native(sessions),coordinator=new ResearchCoordinator({store,owner,native:first,Engine,model:{provider:'synthetic-review',model:'none'},intervalSeconds:60});
