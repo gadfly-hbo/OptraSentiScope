@@ -82,6 +82,7 @@
 - 旧版兼容补充：旧运行记录没有 heartbeat/context 标记，首次恢复曾重复创建心跳；现从原生 Schedule 与已保存 context 消息推断旧事实，实际 `6ec330d` 恢复重跑 PASS，未重复派发。
 - 调度退役时序：存活句柄上提前 delete 曾导致 Host-controls 停止/续派失败；现存活期间只 pause，dispose 确认后再 delete 并保存回执。过程中临时诊断自身引入的 `ReferenceError` 已移除，Host-controls 与长流重跑 PASS。
 - artifact-followup 探针曾要求无历史缓存权限时重开仍回放 v1 正文；按遮蔽契约改为断言安全旧版索引，官方链重跑 PASS，未放宽产品权限。
+- PR #4 首轮 CI FAIL：Ubuntu 没有本机 ignored 的 `legacy-6ec330d` worktree，`check:legacy-recovery` 无法复制旧探针。该检查保留为本机专项并从统一 CI 链移出；现行恢复与长流仍在 CI，旧版恢复以本机固定证据单独报告。
 
 ## 独立复核 R4 与修复
 
