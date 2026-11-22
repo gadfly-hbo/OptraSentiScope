@@ -35,7 +35,7 @@
 | 完整 `npm run check`（锁窗口修复后） | PASS | `.local/trial-command-checks/full-check-3.log`：344/344、runtime preparation、公开 SDK 边界及 15 条官方/工程链全部通过 |
 | 依赖审计 | PASS | `npm audit --audit-level=high` 0 vulnerabilities；本候选未新增 npm 依赖 |
 | 独立复核 | PASS_WITH_FINDINGS（仅余 INFO） | R1/R2 发现全部关闭；R3 终验 N1 关闭且无低/中/高问题 |
-| Git/CI/合并/切换原服务 | NOT_RUN | 待用户授权与最终复核 |
+| Git/CI/合并/切换原服务 | PASS | PR #13 两次 CI PASS 后合并；launchd 已按授权切到 launcher，备份与读回留证 |
 
 ## 独立复核 R1 与 LOW 修复
 
@@ -49,6 +49,13 @@
 - R2 独立重验：`.local/independent/trial-commands-r2/REPORT.md`，原 4 项 LOW 全部 RESOLVED；压测发现新低危 N1：`link` 成功到清理临时文件之间锁 `nlink=2`，并发者约 0.125% 被保守误报 `unsafe_control_file`。
 - N1 修复：`readControl` 仅在 operation.lock 语义下允许 `nlink<=2`，instance/control 仍拒绝硬链接；update 失败日志改为 best-effort，不掩盖原错误；更新后启动子进程加 120 秒超时。新增 24 并发×3 轮锁压测，`.local/trial-command-checks/n1-fix-unit-1.log` 12/12。
 - R3 独立终验：`.local/independent/trial-commands-r3/REPORT.md`，N1 与两条 INFO 修复均 RESOLVED；3000 次锁竞争 0 错误、0 残留，instance 硬链接仍 fail-closed，12/12 测试独立复跑。仅余 INFO：极端 SIGKILL 可留下 `.operation.lock-*` 临时文件（不阻塞且可人工保留反馈）、operation.lock 的 nlink=2 容忍未加 mtime 门控（无实际安全后果）。四原则通过。
+
+## Git、CI 与本机切换回执
+
+- 工作分支 `qoder/trial-commands` 提交 `dd94ade9105aaab299e1d10d0ad1aba396d0427f`；集中 PR #13 https://github.com/gadfly-hbo/OptraSentiScope/pull/13 。实际 head CI run `44975143295` PASS（check 5m28s），squash 合并提交 `bd3fc692b86bae0d2159afdc57a8af1fb949a0f8`（2026-11-22T02:20:05Z）。合并后 main CI run `44975601736` PASS，本地 `main` 已安全快进。
+- 切换前备份：`.local/service-trial-backup-20261122-022634-launcher-switch/`。runtime 备份 111 个文件校验 `ok`，保留原 host/plist/proof/凭据/runtime/合成来源与 switch-context；上一轮恢复工作树 `.local/service-trial-recovery-44760bd` 仍保留。
+- 已按授权 `launchctl bootout gui/501/dev.optrasentiscope.trial`，确认 8766 释放后用根目录“启动 OptraSentiScope.command”接管；随后实际执行“停止→启动”循环。当前 wrapper PID `34472`、官方 Harness listener PID `34483`，launchd job 不再安装，健康 ok。证据：`.local/trial-command-checks/switch-start-1.json`、`switch-stop-1.json`、`switch-start-2.json`、`switch-health-*.json` 和更新后的 `.local/service-trial-20261120/service-proof.json`。
+- 数据读回：11 个既有委托保留；独立验收委托 `3455ca61-07d9-4250-93ad-40778ff24afa` 来源 ready、v2 报告仍可读。未改私有 Host 配置和凭据；真实模型/真实来源/Call 仍 NOT_RUN。
 
 ## RED 与过程失败留痕
 
