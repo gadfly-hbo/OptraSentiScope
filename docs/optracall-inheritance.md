@@ -76,3 +76,12 @@
 读取所得工程规范 Git blob 为 `1ae8a35ed212cf7681a100d091dc7cfac1a364c4`，工作流 blob 为 `65e88ab32fdafc5ed6662454f10739340ee05355`。源文件与只读核验回执保留在 `.local/blueprint-handoff-delivery/`；本次仅更新本项目工程规范的当前范围及第5节来源／适用说明，不把上游新增产品实现或历史授权搬入本项目。
 
 SentiScope 无包管理文件、产品代码和检查入口，直接复制该工作流无法运行。经说明后，用户明确选择：“本轮按纯文档规则合并，CI 记录未建立；产品搭建时复用同款 CI”。本轮不创建自创 CI、不引入 OptraCall 产品依赖、不将本地文档检查写成 CI PASS。通用产品搭建时再按上游同款工作流落实真实检查。此为本轮明确决定，不代表上游提供了文档豁免或后续检查可以自动省略。
+
+## 一键启动命令来源与适配（2026-11-22）
+
+用户要求“查看 OptraCall 的三个一键启动 command，关闭，更新；本产品也需要一套”。只读核对 Mac mini `~/DevWorkSpace/OptraCall` 干净 `main` HEAD `8ad8564ca8d47ff27bd0b335456c99bfa1706f94`：
+
+- 来源入口：`启动 OptraCall.command`、`停止 OptraCall.command`、`更新并启动 OptraCall.command`；均调用 `scripts/trial-command.sh start|stop|update`。
+- 来源实现：`scripts/trial-launcher.mjs`、`scripts/trial-update.mjs`、`package.json` 的 `start`/`stop`/`update:trial` 及 `tests/trial-launcher.test.ts`、`tests/trial-update.test.ts`。
+- 本项目适配：保留三入口形态、操作锁、控制文件安全、实例身份、端口/健康检查、干净 main、官方 origin、可快进、目标 main push CI 成功和更新后启动；将端口/配置/Node 版本/运行入口适配为 OptraSentiScope 的 8766、私有 Host JSON、Node 24.9、`scripts/runtime/start.mjs` 与 `setup:sdk`，不复制上游前端构建、数据目录和业务运行时。
+- 上游未修改；本项目实现与差异记录在 [trial-commands-v01](../openspec/changes/trial-commands-v01/spec.md)，不自动继承上游后续变化。

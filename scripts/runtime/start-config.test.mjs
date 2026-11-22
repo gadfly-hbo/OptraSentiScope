@@ -15,6 +15,14 @@ test('start.mjs rejects a non-boolean syntheticTrial flag before launching the h
   assert.equal(result.code,1);assert.match(result.stderr,/INVALID_SYNTHETIC_TRIAL/);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
+test('start.mjs accepts only a safe launcher instance id',async()=>{
+ const root=resolve(project,'.local/start-config-tests',`run-${Date.now()}`);mkdirSync(root,{recursive:true});
+ try{
+  const result=await run(['--instance-id','unsafe value']);
+  assert.equal(result.code,1);assert.match(result.stderr,/INVALID_INSTANCE_ID/);
+  const help=await run(['--help']);assert.equal(help.code,0);assert.match(help.stdout,/--instance-id/);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
 test('start.mjs help documents the syntheticTrial flag and source default scope',async()=>{
  const result=await run(['--help']);assert.equal(result.code,0);assert.match(result.stdout,/syntheticTrial/);assert.match(result.stdout,/sentiscope-synthetic-trial/);assert.match(result.stdout,/goalIncludes/);
 });
