@@ -120,13 +120,15 @@ function resourceDefaults(value) {
 }
 
 function parse(args) {
-  const options = { runtimeRoot: '.local/product-runtime', sdkRoot: '.local/official-sdk' };
+  const options = { runtimeRoot: '.local/product-runtime', sdkRoot: '.local/official-sdk', instanceId: undefined };
   while (args.length) {
     const flag = args.shift();
     if (flag === '--help') return { help: true };
-    if (!['--config', '--runtime-root', '--sdk-root'].includes(flag) || !args.length || args[0].startsWith('--')) throw new Error(`UNKNOWN_OPTION_OR_MISSING_VALUE: ${flag}`);
-    options[{ '--config': 'config', '--runtime-root': 'runtimeRoot', '--sdk-root': 'sdkRoot' }[flag]] = args.shift();
+    if (!['--config', '--runtime-root', '--sdk-root', '--instance-id'].includes(flag) || !args.length || args[0].startsWith('--')) throw new Error(`UNKNOWN_OPTION_OR_MISSING_VALUE: ${flag}`);
+    const key = { '--config': 'config', '--runtime-root': 'runtimeRoot', '--sdk-root': 'sdkRoot', '--instance-id': 'instanceId' }[flag];
+    options[key] = args.shift();
   }
+  if (options.instanceId !== undefined) reference(options.instanceId, 'INSTANCE_ID', 128);
   return options;
 }
 
@@ -228,7 +230,7 @@ function profile(runtimeRoot, sdkRoot, config) {
 async function main() {
   const options = parse(process.argv.slice(2));
   if (options.help) {
-    console.log('node scripts/runtime/start.mjs [--config .local/host.json] [--runtime-root .local/product-runtime] [--sdk-root .local/official-sdk]\nPrivate Host JSON: dataDirectory, owner {enterpriseId,principalId}, port, optional model {provider,model,maxTokens}, intervalSeconds, grants {delegationId: SourceGrant[]}, budgets, modelEgress, credentialGrants, resourceDefaults, auth {operatorTokenHash,maintainerTokenHash,sessionTtlSeconds}, syntheticTrial (boolean).\nresourceDefaults.sources={goalIncludes,grants:SourceGrant[]} preauthorizes only newly created operator delegations whose initial goal contains the fixed scope phrase; explicit per-delegation grants take precedence and revocation is never reset.\nResource configuration holds limits and non-secret references only. Credentials stay in data/private/credentials.yaml; no external Provider, network or compute enable flag is supported. syntheticTrial=true registers only the fixed in-process local synthetic adapter (sentiscope-synthetic-trial/synthetic) for loopback trial use and still requires auth; it never enables external model transport.\nAll relative paths resolve from the project. Defaults: port 8766, no model, no sources, no enabled model transport. No installation or inherited DSH configuration.');
+    console.log('node scripts/runtime/start.mjs [--config .local/host.json] [--runtime-root .local/product-runtime] [--sdk-root .local/official-sdk] [--instance-id <stable-id>]\nPrivate Host JSON: dataDirectory, owner {enterpriseId,principalId}, port, optional model {provider,model,maxTokens}, intervalSeconds, grants {delegationId: SourceGrant[]}, budgets, modelEgress, credentialGrants, resourceDefaults, auth {operatorTokenHash,maintainerTokenHash,sessionTtlSeconds}, syntheticTrial (boolean).\nresourceDefaults.sources={goalIncludes,grants:SourceGrant[]} preauthorizes only newly created operator delegations whose initial goal contains the fixed scope phrase; explicit per-delegation grants take precedence and revocation is never reset.\nResource configuration holds limits and non-secret references only. Credentials stay in data/private/credentials.yaml; no external Provider, network or compute enable flag is supported. syntheticTrial=true registers only the fixed in-process local synthetic adapter (sentiscope-synthetic-trial/synthetic) for loopback trial use and still requires auth; it never enables external model transport.\n--instance-id is a non-sensitive launcher identity used only in the process command line; it does not alter Host configuration.\nAll relative paths resolve from the project. Defaults: port 8766, no model, no sources, no enabled model transport. No installation or inherited DSH configuration.');
     return;
   }
   process.umask(0o077);

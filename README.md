@@ -33,6 +33,7 @@ OptraCall 的同源项目。用户已确认通用首版搭建规格和UI Demo并
 - [条件经验重评固定合成案例包 v0.1](docs/poc/conditional-experience-reassessment-v0.1/README.md) · [仅供评阅的评阅表](docs/poc/conditional-experience-reassessment-v0.1/reference/review-sheet.md)
 - [工程入口](AGENTS.md)
 - [开发流程规范](docs/engineering-workflow.md)
+- 本机一键命令：`启动 OptraSentiScope.command` / `停止 OptraSentiScope.command` / `更新并启动 OptraSentiScope.command`（同 `npm start` / `npm stop` / `npm run update:trial`）
 - [分析类 Skill 编写规范](docs/分析类Skill编写规范.md)
 - [OptraCall 继承来源与初始化记录](docs/optracall-inheritance.md)
 - [本轮蓝图固化与 Git／CI 交付范围](docs/blueprint-handoff-delivery.md)

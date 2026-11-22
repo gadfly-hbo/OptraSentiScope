@@ -9,8 +9,12 @@
 ```sh
 npm ci --ignore-scripts
 npm run check
-npm start
+npm start       # 本机一键启动：读取私有试用配置，启动后打开浏览器
+npm stop        # 只停止启动器记录的本产品实例
+npm run update:trial  # 停止后核对通过 CI 的官方 main，快进、安装/准备并重启
 ```
+
+根目录同功能双击入口为 `启动 OptraSentiScope.command`、`停止 OptraSentiScope.command`、`更新并启动 OptraSentiScope.command`。默认读取 `.local/service-trial-20261120/host.json` 及其旁路 runtime/launcher-state；配置缺失时不自动创建或修改。更新要求干净 `main`、官方 origin、目标 main push CI 成功且可快进。原离线工作台保留为 `npm run start:offline`。
 
 已有agent-browser／浏览器时可运行`npm run check:ui`、`check:general-ui`、`check:lifecycle-ui`、`check:revocation-ui`、`check:auth-ui`等浏览器检查，它们新建私有合成资料库，不连接现有工作台或业务数据。已有获批官方SDK私有安装时可运行`npm run check:sdk`、`check:sources`、`check:recovery`、`check:legacy-recovery`、`check:longstream`，详见[最小SDK工程检查](../scripts/sdk/README.md)与[P03–P05结果记录](../openspec/changes/p03-p05-sustained-sources/results.md)。这些命令不会安装工具／依赖；自有单元检查、真实浏览器和SDK工程检查分别报告。
 
